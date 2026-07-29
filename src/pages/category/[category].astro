@@ -1,0 +1,44 @@
+---
+import { getCollection } from 'astro:content';
+import BaseHead from '../../components/BaseHead.astro';
+import Footer from '../../components/Footer.astro';
+import Header from '../../components/Header.astro';
+import PostList from '../../components/PostList.astro';
+import SiteSidebar from '../../components/SiteSidebar.astro';
+import { SITE_TITLE } from '../../consts';
+import { getCategoryCounts, getCategoryName, sortPostsByDate } from '../../lib/blog';
+
+export async function getStaticPaths() {
+	const posts = sortPostsByDate(await getCollection('blog'));
+	return getCategoryCounts(posts).map((category) => ({
+		params: { category: category.slug },
+		props: { categoryName: category.name, posts },
+	}));
+}
+
+const { categoryName, posts } = Astro.props;
+const categoryPosts = posts.filter((post) => getCategoryName(post) === categoryName);
+---
+
+<!doctype html>
+<html lang="ko-KR">
+	<head>
+		<BaseHead
+			title={`${categoryName} | ${SITE_TITLE}`}
+			description={`${categoryName} 카테고리의 기술 기록입니다.`}
+		/>
+	</head>
+	<body>
+		<Header />
+		<main>
+			<div class="page-grid">
+				<SiteSidebar posts={posts} activeCategory={categoryName} />
+				<section aria-labelledby="category-posts">
+					<h1 id="category-posts" class="section-title">{categoryName}</h1>
+					<PostList posts={categoryPosts} emptyMessage="이 카테고리에 표시할 글이 없습니다." />
+				</section>
+			</div>
+		</main>
+		<Footer />
+	</body>
+</html>

@@ -1,0 +1,53 @@
+---
+import type { BlogPost } from '../lib/blog';
+import { getCategoryCounts } from '../lib/blog';
+
+interface Props {
+	posts: BlogPost[];
+	activeCategory?: string;
+}
+
+const { posts, activeCategory } = Astro.props;
+const categories = getCategoryCounts(posts);
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<nav class="category-nav" aria-label="카테고리">
+	<a class:list={['category-link', { active: !activeCategory }]} href={`${basePath}/blog/`}>
+		전체 글
+	</a>
+	{
+		categories.map((category) => (
+			<a class:list={['category-link', { active: activeCategory === category.name }]} href={category.href}>
+				{category.name}
+			</a>
+		))
+	}
+</nav>
+
+<style>
+	.category-nav {
+		display: grid;
+		gap: 0.85rem;
+		font-weight: 800;
+	}
+
+	.category-link {
+		color: var(--color-text);
+		font-size: 0.95rem;
+	}
+
+	.category-link.active,
+	.category-link:hover,
+	.category-link:focus-visible {
+		color: var(--color-accent);
+	}
+
+	@media (max-width: 760px) {
+		.category-nav {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.8rem 1.2rem;
+		}
+	}
+</style>

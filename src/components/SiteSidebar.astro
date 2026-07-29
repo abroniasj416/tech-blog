@@ -1,0 +1,29 @@
+---
+import CategoryNav from './CategoryNav.astro';
+import ProfileMark from './ProfileMark.astro';
+import type { BlogPost } from '../lib/blog';
+
+interface Props {
+	posts: BlogPost[];
+	activeCategory?: string;
+}
+
+const { posts, activeCategory } = Astro.props;
+---
+
+<aside class="site-sidebar" aria-label="블로그 탐색">
+	<ProfileMark />
+	<CategoryNav posts={posts} activeCategory={activeCategory} />
+</aside>
+
+<style>
+	.site-sidebar {
+		padding-top: 0.2rem;
+	}
+
+	@media (max-width: 760px) {
+		.site-sidebar {
+			padding-top: 0;
+		}
+	}
+</style>

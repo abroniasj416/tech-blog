@@ -1,0 +1,76 @@
+---
+import type { BlogPost } from '../lib/blog';
+import { formatPostDate, getPostPath } from '../lib/blog';
+
+interface Props {
+	posts: BlogPost[];
+	emptyMessage?: string;
+}
+
+const { posts, emptyMessage = '아직 표시할 글이 없습니다.' } = Astro.props;
+---
+
+{
+	posts.length > 0 ? (
+		<ol class="post-list">
+			{posts.map((post) => (
+				<li>
+					<article class="post-item">
+						<a href={getPostPath(post)} class="post-title">
+							{post.data.title}
+						</a>
+						<p class="post-date">
+							<span aria-hidden="true">▣</span>
+							<time datetime={post.data.pubDate.toISOString()}>{formatPostDate(post.data.pubDate)}</time>
+						</p>
+						<p class="post-description">{post.data.description}</p>
+					</article>
+				</li>
+			))}
+		</ol>
+	) : (
+		<p class="empty-message">{emptyMessage}</p>
+	)
+}
+
+<style>
+	.post-list {
+		display: grid;
+		gap: 1.9rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.post-title {
+		color: var(--color-accent);
+		font-size: clamp(1.18rem, 2vw, 1.42rem);
+		font-weight: 750;
+		line-height: 1.35;
+	}
+
+	.post-title:hover,
+	.post-title:focus-visible {
+		color: #d95400;
+	}
+
+	.post-date {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-top: 0.35rem;
+		color: var(--color-subtle);
+		font-size: 0.78rem;
+	}
+
+	.post-description {
+		margin-top: 0.35rem;
+		color: #333333;
+		font-size: 0.95rem;
+		line-height: 1.65;
+	}
+
+	.empty-message {
+		color: var(--color-muted);
+	}
+</style>
