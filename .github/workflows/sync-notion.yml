@@ -55,14 +55,15 @@ jobs:
         id: commit
         shell: bash
         run: |
-          if git diff --quiet -- src/content/blog; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/content/blog
+
+          if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/content/blog
           git commit -m "chore(blog): sync posts from Notion"
           git push origin HEAD:main
           echo "changed=true" >> "$GITHUB_OUTPUT"
