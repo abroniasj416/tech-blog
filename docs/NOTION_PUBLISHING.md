@@ -2,18 +2,19 @@
 
 This project uses Notion as the source CMS for an Astro technical blog. Posts whose Notion `상태` value is `발행 대기` can be converted into Markdown files under `src/content/blog/` and then published through GitHub Actions.
 
-The GitHub Pages site is:
+The blog is published through GitHub Pages with a custom domain:
 
 ```text
-https://abroniasj416.github.io/tech-blog/
+https://blog.hwangsoojin.cloud/
 ```
 
-Astro is configured for a GitHub Pages project site:
+Astro is configured for the custom domain root:
 
 ```js
-site: 'https://abroniasj416.github.io',
-base: '/tech-blog',
+site: 'https://blog.hwangsoojin.cloud',
 ```
+
+Do not set `base` while the custom domain serves the blog from `/`.
 
 ## Notion properties
 
@@ -43,10 +44,10 @@ NOTION_DATA_SOURCE_ID=...
 BLOG_BASE_URL=...
 ```
 
-For GitHub Pages publishing, set `BLOG_BASE_URL` to:
+For publishing with the custom domain, set `BLOG_BASE_URL` to:
 
 ```text
-https://abroniasj416.github.io/tech-blog
+https://blog.hwangsoojin.cloud
 ```
 
 GitHub Actions secrets:

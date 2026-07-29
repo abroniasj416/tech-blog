@@ -1,6 +1,6 @@
 # Astro Starter Kit: Blog
 
-This repository is being extended into a Notion-backed technical blog publisher for GitHub Pages at `https://abroniasj416.github.io/tech-blog/`. See [Notion Publishing](docs/NOTION_PUBLISHING.md) for the local dry-run flow, GitHub Actions flow, environment variables, Pages settings, and safety rules.
+This repository is being extended into a Notion-backed technical blog publisher at `https://blog.hwangsoojin.cloud/`. See [Notion Publishing](docs/NOTION_PUBLISHING.md) for the local dry-run flow, GitHub Actions flow, environment variables, Pages settings, and safety rules.
 
 ```sh
 npm create astro@latest -- --template blog
