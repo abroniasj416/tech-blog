@@ -9,6 +9,11 @@ import { getRequiredEnv, notionRequest, NOTION_API_VERSION } from './lib/notion.
 
 const PUBLISH_STATUS = '발행 대기';
 const DONE_STATUS = '발행 완료';
+const DELETE_PENDING_STATUS = '삭제 대기';
+const DELETED_STATUS = '삭제 완료';
+const FINALIZE_MISSING_DELETE_FILES = false;
+const ACTION_PUBLISH = 'publish';
+const ACTION_DELETE = 'delete';
 const PROPERTIES = {
   title: '제목',
   status: '상태',
@@ -154,21 +159,22 @@ function parsePostPage(page) {
   };
 }
 
-function validateSlug(slug) {
+export function validateSlug(slug) {
   const errors = [];
 
   if (!slug) errors.push('Slug is empty.');
   if (!/^[a-z0-9-]+$/.test(slug)) errors.push('Slug must contain only lowercase letters, numbers, and hyphens.');
   if (slug.startsWith('-') || slug.endsWith('-')) errors.push('Slug must not start or end with a hyphen.');
   if (slug.includes('--')) errors.push('Slug must not contain consecutive hyphens.');
-  if (slug.includes('../') || slug.includes('..\\')) errors.push('Slug must not contain parent directory segments.');
+  if (slug.includes('..')) errors.push('Slug must not contain parent directory segments.');
   if (slug.includes('/') || slug.includes('\\')) errors.push('Slug must not contain slashes.');
+  if (/^[a-zA-Z]:/.test(slug)) errors.push('Slug must not contain a drive letter.');
   if (path.isAbsolute(slug)) errors.push('Slug must not be an absolute path.');
 
   return errors;
 }
 
-function validatePost(post) {
+function validatePublishPost(post) {
   const errors = [];
 
   if (!post.pageId) errors.push('Missing page ID.');
@@ -182,7 +188,18 @@ function validatePost(post) {
   return errors;
 }
 
-function getBlogPathForSlug(slug, outputDir = blogDir) {
+function validateDeletePost(post) {
+  const errors = [];
+
+  if (!post.pageId) errors.push('Missing page ID.');
+  if (!post.slug) errors.push('Missing Slug.');
+
+  errors.push(...validateSlug(post.slug));
+
+  return errors;
+}
+
+export function getBlogPathForSlug(slug, outputDir = blogDir) {
   const filePath = path.resolve(outputDir, `${slug}.md`);
   const normalizedBase = `${path.resolve(outputDir)}${path.sep}`;
 
@@ -241,7 +258,7 @@ function hasExternalMarkdownImages(markdown) {
   return /!\[[^\]]*\]\(https?:\/\/[^)]+\)/i.test(markdown);
 }
 
-async function queryPendingPosts({ token, dataSourceId }) {
+async function queryPostsByStatus({ token, dataSourceId, status }) {
   const results = [];
   let nextCursor;
 
@@ -251,7 +268,7 @@ async function queryPendingPosts({ token, dataSourceId }) {
       filter: {
         property: PROPERTIES.status,
         status: {
-          equals: PUBLISH_STATUS,
+          equals: status,
         },
       },
     };
@@ -326,29 +343,38 @@ async function retrieveMarkdownPart({ token, id }) {
   return response;
 }
 
+async function readTextFileIfExists(filePath) {
+  try {
+    return await readFile(filePath, 'utf8');
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isGeneratedPostContent(content) {
+  return content.includes(GENERATED_MARKER) || content.includes('notionPageId:');
+}
+
 async function writePostFile({ post, markdown, dryRun }) {
   const outputDir = dryRun ? dryRunDir : blogDir;
   const filePath = getBlogPathForSlug(post.slug, outputDir);
   const content = renderMarkdownFile(post, markdown);
-  let previousContent = null;
+  const previousContent = await readTextFileIfExists(filePath);
 
   await mkdir(outputDir, { recursive: true });
 
-  try {
-    previousContent = await readFile(filePath, 'utf8');
-  } catch (error) {
-    if (error?.code !== 'ENOENT') {
-      throw error;
-    }
-  }
-
-  if (!dryRun && previousContent && !previousContent.includes(GENERATED_MARKER) && !previousContent.includes('notionPageId:')) {
+  if (!dryRun && previousContent && !isGeneratedPostContent(previousContent)) {
     throw new Error(`Refusing to overwrite non-generated existing file: ${path.relative(rootDir, filePath)}`);
   }
 
   await writeFile(filePath, content, 'utf8');
 
   return {
+    action: ACTION_PUBLISH,
     filePath,
     relativePath: path.relative(rootDir, filePath),
     existed: previousContent !== null,
@@ -356,12 +382,52 @@ async function writePostFile({ post, markdown, dryRun }) {
   };
 }
 
-async function rollbackWrittenFiles(writtenFiles) {
-  for (const written of writtenFiles.toReversed()) {
-    if (written.previousContent === null) {
-      await rm(written.filePath, { force: true });
-    } else {
-      await writeFile(written.filePath, written.previousContent, 'utf8');
+async function deletePostFile({ post, dryRun }) {
+  const filePath = getBlogPathForSlug(post.slug);
+  const relativePath = path.relative(rootDir, filePath);
+  const previousContent = await readTextFileIfExists(filePath);
+
+  if (previousContent === null) {
+    return {
+      action: ACTION_DELETE,
+      filePath,
+      relativePath,
+      existed: false,
+      previousContent: null,
+      deleted: false,
+      fileMissing: true,
+    };
+  }
+
+  if (!isGeneratedPostContent(previousContent)) {
+    throw new Error(`Refusing to delete non-generated existing file: ${relativePath}`);
+  }
+
+  if (!dryRun) {
+    await rm(filePath, { force: true });
+  }
+
+  return {
+    action: ACTION_DELETE,
+    filePath,
+    relativePath,
+    existed: true,
+    previousContent,
+    deleted: !dryRun,
+    fileMissing: false,
+  };
+}
+
+async function rollbackFileChanges(changes) {
+  for (const change of changes.toReversed()) {
+    if (change.action === ACTION_PUBLISH) {
+      if (change.previousContent === null) {
+        await rm(change.filePath, { force: true });
+      } else {
+        await writeFile(change.filePath, change.previousContent, 'utf8');
+      }
+    } else if (change.action === ACTION_DELETE && change.previousContent !== null) {
+      await writeFile(change.filePath, change.previousContent, 'utf8');
     }
   }
 }
@@ -385,7 +451,7 @@ function runCommand(command, args) {
   });
 }
 
-async function updateNotionPage({ token, pageId, publishedUrl }) {
+async function updateNotionPublishedPage({ token, pageId, publishedUrl }) {
   await notionRequest({
     token,
     method: 'PATCH',
@@ -405,6 +471,26 @@ async function updateNotionPage({ token, pageId, publishedUrl }) {
   });
 }
 
+async function updateNotionDeletedPage({ token, pageId }) {
+  await notionRequest({
+    token,
+    method: 'PATCH',
+    path: `/pages/${encodeURIComponent(pageId)}`,
+    body: {
+      properties: {
+        [PROPERTIES.status]: {
+          status: {
+            name: DELETED_STATUS,
+          },
+        },
+        [PROPERTIES.publishedUrl]: {
+          url: null,
+        },
+      },
+    },
+  });
+}
+
 async function writeManifest(items) {
   await mkdir(tmpDir, { recursive: true });
   await writeFile(
@@ -413,6 +499,7 @@ async function writeManifest(items) {
       {
         generatedAt: new Date().toISOString(),
         notionApiVersion: NOTION_API_VERSION,
+        missingDeleteFilesFinalize: FINALIZE_MISSING_DELETE_FILES,
         items,
       },
       null,
@@ -435,115 +522,287 @@ async function readManifest() {
 
 function createStats() {
   return {
-    pendingCount: 0,
-    successCount: 0,
-    skippedCount: 0,
-    failedCount: 0,
-    files: [],
-    notionUpdateSuccessCount: 0,
-    notionUpdateFailureCount: 0,
+    publish: {
+      pendingCount: 0,
+      successCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      notionUpdateSuccessCount: 0,
+      notionUpdateFailureCount: 0,
+    },
+    delete: {
+      pendingCount: 0,
+      successCount: 0,
+      fileMissingCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      notionUpdateSuccessCount: 0,
+      notionUpdateFailureCount: 0,
+    },
+    git: {
+      createdFiles: [],
+      updatedFiles: [],
+      deletedFiles: [],
+    },
   };
+}
+
+function getActionableSuccessCount(stats) {
+  return stats.publish.successCount + stats.delete.successCount;
+}
+
+function getPendingCount(stats) {
+  return stats.publish.pendingCount + stats.delete.pendingCount;
+}
+
+function getFailureCount(stats) {
+  return stats.publish.failedCount + stats.delete.failedCount;
 }
 
 function printStats(stats) {
   console.log('Summary:');
-  console.log(`- Pending posts queried: ${stats.pendingCount}`);
-  console.log(`- Successful posts: ${stats.successCount}`);
-  console.log(`- Skipped posts: ${stats.skippedCount}`);
-  console.log(`- Failed posts: ${stats.failedCount}`);
-  console.log(`- Files generated or updated: ${stats.files.length}`);
-  for (const file of stats.files) {
-    console.log(`  - ${file}`);
-  }
-  console.log(`- Notion updates succeeded: ${stats.notionUpdateSuccessCount}`);
-  console.log(`- Notion updates failed: ${stats.notionUpdateFailureCount}`);
+  console.log('Publish:');
+  console.log(`- Pending publish posts: ${stats.publish.pendingCount}`);
+  console.log(`- Generated or updated: ${stats.publish.successCount}`);
+  console.log(`- Skipped: ${stats.publish.skippedCount}`);
+  console.log(`- Failed: ${stats.publish.failedCount}`);
+  console.log(`- Notion publish updates succeeded: ${stats.publish.notionUpdateSuccessCount}`);
+  console.log(`- Notion publish updates failed: ${stats.publish.notionUpdateFailureCount}`);
+  console.log('Delete:');
+  console.log(`- Pending delete posts: ${stats.delete.pendingCount}`);
+  console.log(`- Deleted: ${stats.delete.successCount}`);
+  console.log(`- File missing: ${stats.delete.fileMissingCount}`);
+  console.log(`- Skipped: ${stats.delete.skippedCount}`);
+  console.log(`- Failed: ${stats.delete.failedCount}`);
+  console.log(`- Notion delete updates succeeded: ${stats.delete.notionUpdateSuccessCount}`);
+  console.log(`- Notion delete updates failed: ${stats.delete.notionUpdateFailureCount}`);
+  console.log('Git:');
+  console.log(`- Created files: ${stats.git.createdFiles.length}`);
+  for (const file of stats.git.createdFiles) console.log(`  - ${file}`);
+  console.log(`- Updated files: ${stats.git.updatedFiles.length}`);
+  for (const file of stats.git.updatedFiles) console.log(`  - ${file}`);
+  console.log(`- Deleted files: ${stats.git.deletedFiles.length}`);
+  for (const file of stats.git.deletedFiles) console.log(`  - ${file}`);
+}
+
+async function getPublishAndDeletePosts({ token, dataSourceId }) {
+  const [publishPages, deletePages] = await Promise.all([
+    queryPostsByStatus({ token, dataSourceId, status: PUBLISH_STATUS }),
+    queryPostsByStatus({ token, dataSourceId, status: DELETE_PENDING_STATUS }),
+  ]);
+
+  return {
+    publishPosts: publishPages.map(parsePostPage),
+    deletePosts: deletePages.map(parsePostPage),
+  };
 }
 
 async function runQuery() {
   const token = getRequiredEnv('NOTION_API_TOKEN');
   const dataSourceId = await getDataSourceId({ token, allowDatabaseFallback: true });
-  const pages = await queryPendingPosts({ token, dataSourceId });
-  const posts = pages.map(parsePostPage);
+  const { publishPosts, deletePosts } = await getPublishAndDeletePosts({ token, dataSourceId });
   const stats = createStats();
-  stats.pendingCount = posts.length;
+  stats.publish.pendingCount = publishPosts.length;
+  stats.delete.pendingCount = deletePosts.length;
 
   console.log(`Notion API version: ${NOTION_API_VERSION}`);
-  console.log(`Found ${posts.length} pending post(s).`);
+  console.log(`Pending publish posts: ${publishPosts.length}`);
+  console.log(`Pending delete posts: ${deletePosts.length}`);
 
-  for (const post of posts) {
-    const validationErrors = validatePost(post);
+  console.log('Publish:');
+  for (const post of publishPosts) {
+    const validationErrors = validatePublishPost(post);
     const status = validationErrors.length === 0 ? 'valid' : `invalid: ${validationErrors.join(' ')}`;
     console.log(`- ${post.title || '(untitled)'} [${post.slug || 'no-slug'}] ${status}`);
+  }
+
+  console.log('Delete:');
+  for (const post of deletePosts) {
+    const validationErrors = validateDeletePost(post);
+    let status = validationErrors.length === 0 ? 'valid' : `invalid: ${validationErrors.join(' ')}`;
+
+    if (validationErrors.length === 0) {
+      const filePath = getBlogPathForSlug(post.slug);
+      const content = await readTextFileIfExists(filePath);
+      status = content === null ? 'file missing; Notion status will stay unchanged' : 'file exists';
+    }
+
+    console.log(`- ${post.title || post.pageId || '(untitled)'} [${post.slug || 'no-slug'}] ${status}`);
   }
 
   printStats(stats);
   return { stats };
 }
 
+async function handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, manifestItems, fileChanges }) {
+  const validationErrors = validatePublishPost(post);
+
+  if (validationErrors.length > 0) {
+    stats.publish.skippedCount += 1;
+    console.error(`Skipping publish ${post.title || post.pageId || '(unknown page)'}: ${validationErrors.join(' ')}`);
+    manifestItems.push({
+      action: ACTION_PUBLISH,
+      pageId: post.pageId,
+      title: post.title,
+      slug: post.slug,
+      success: false,
+      plannedStatus: DONE_STATUS,
+      reason: validationErrors.join(' '),
+    });
+    return;
+  }
+
+  try {
+    const markdown = await retrieveMarkdown({ token, pageId: post.pageId });
+    const publishedUrl = joinUrl(blogBaseUrl, getPostRoute(post.slug));
+    const written = await writePostFile({ post, markdown, dryRun });
+
+    fileChanges.push(written);
+    stats.publish.successCount += 1;
+
+    if (written.existed) {
+      stats.git.updatedFiles.push(written.relativePath);
+    } else {
+      stats.git.createdFiles.push(written.relativePath);
+    }
+
+    console.log(`Prepared publish: ${post.title}`);
+    console.log(`- File: ${written.relativePath}`);
+    console.log(`- Frontmatter: title, description, pubDate${post.category ? ', category' : ''}${post.tags.length ? ', tags' : ''}`);
+    console.log(`- Planned URL: ${publishedUrl}`);
+
+    if (hasExternalMarkdownImages(markdown)) {
+      console.log('- Image note: external markdown image URLs were left unchanged and may expire.');
+    }
+
+    manifestItems.push({
+      action: ACTION_PUBLISH,
+      pageId: post.pageId,
+      title: post.title,
+      slug: post.slug,
+      file: path.relative(rootDir, getBlogPathForSlug(post.slug)),
+      publishedUrl,
+      plannedStatus: DONE_STATUS,
+      success: true,
+    });
+  } catch (error) {
+    stats.publish.failedCount += 1;
+    console.error(`Failed publish ${post.title || post.pageId}: ${error instanceof Error ? error.message : String(error)}`);
+    manifestItems.push({
+      action: ACTION_PUBLISH,
+      pageId: post.pageId,
+      title: post.title,
+      slug: post.slug,
+      success: false,
+      plannedStatus: DONE_STATUS,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+async function handleDeletePost({ post, dryRun, stats, manifestItems, fileChanges }) {
+  const validationErrors = validateDeletePost(post);
+
+  if (validationErrors.length > 0) {
+    stats.delete.failedCount += 1;
+    console.error(`Skipping delete ${post.title || post.pageId || '(unknown page)'}: ${validationErrors.join(' ')}`);
+    manifestItems.push({
+      action: ACTION_DELETE,
+      pageId: post.pageId,
+      title: post.title,
+      slug: post.slug,
+      success: false,
+      plannedStatus: DELETED_STATUS,
+      reason: validationErrors.join(' '),
+    });
+    return;
+  }
+
+  try {
+    const deleted = await deletePostFile({ post, dryRun });
+
+    if (deleted.fileMissing) {
+      stats.delete.fileMissingCount += 1;
+      stats.delete.skippedCount += 1;
+      console.log(`Delete skipped; file is missing: ${post.title || post.pageId} [${post.slug}]`);
+      console.log(`- Expected file: ${deleted.relativePath}`);
+      manifestItems.push({
+        action: ACTION_DELETE,
+        pageId: post.pageId,
+        title: post.title,
+        slug: post.slug,
+        file: deleted.relativePath,
+        success: FINALIZE_MISSING_DELETE_FILES,
+        plannedStatus: DELETED_STATUS,
+        reason: 'File is missing; default policy keeps Notion status unchanged.',
+      });
+      return;
+    }
+
+    fileChanges.push(deleted);
+    stats.delete.successCount += 1;
+    stats.git.deletedFiles.push(deleted.relativePath);
+
+    console.log(`${dryRun ? 'Will delete' : 'Deleted'}: ${post.title || post.pageId}`);
+    console.log(`- File: ${deleted.relativePath}`);
+
+    manifestItems.push({
+      action: ACTION_DELETE,
+      pageId: post.pageId,
+      title: post.title,
+      slug: post.slug,
+      file: deleted.relativePath,
+      publishedUrl: '',
+      plannedStatus: DELETED_STATUS,
+      success: true,
+    });
+  } catch (error) {
+    stats.delete.failedCount += 1;
+    console.error(`Failed delete ${post.title || post.pageId}: ${error instanceof Error ? error.message : String(error)}`);
+    manifestItems.push({
+      action: ACTION_DELETE,
+      pageId: post.pageId,
+      title: post.title,
+      slug: post.slug,
+      success: false,
+      plannedStatus: DELETED_STATUS,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function runGenerate({ dryRun }) {
   const token = getRequiredEnv('NOTION_API_TOKEN');
   const dataSourceId = await getDataSourceId({ token, allowDatabaseFallback: dryRun });
   const blogBaseUrl = await getBlogBaseUrl({ allowAstroSiteFallback: dryRun });
-  const pages = await queryPendingPosts({ token, dataSourceId });
-  const posts = pages.map(parsePostPage);
+  const { publishPosts, deletePosts } = await getPublishAndDeletePosts({ token, dataSourceId });
   const stats = createStats();
   const manifestItems = [];
-  const writtenFiles = [];
+  const fileChanges = [];
 
-  stats.pendingCount = posts.length;
+  stats.publish.pendingCount = publishPosts.length;
+  stats.delete.pendingCount = deletePosts.length;
 
   console.log(`Notion API version: ${NOTION_API_VERSION}`);
-  console.log(`Found ${posts.length} pending post(s).`);
+  console.log(`Pending publish posts: ${publishPosts.length}`);
+  console.log(`Pending delete posts: ${deletePosts.length}`);
 
   if (dryRun) {
     await rm(dryRunDir, { recursive: true, force: true });
   }
 
-  for (const post of posts) {
-    const validationErrors = validatePost(post);
+  if (publishPosts.length > 0) {
+    console.log('Will generate:');
+  }
+  for (const post of publishPosts) {
+    await handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, manifestItems, fileChanges });
+  }
 
-    if (validationErrors.length > 0) {
-      stats.skippedCount += 1;
-      console.error(`Skipping ${post.title || post.pageId || '(unknown page)'}: ${validationErrors.join(' ')}`);
-      manifestItems.push({ pageId: post.pageId, slug: post.slug, success: false, reason: validationErrors.join(' ') });
-      continue;
-    }
-
-    try {
-      const markdown = await retrieveMarkdown({ token, pageId: post.pageId });
-      const publishedUrl = joinUrl(blogBaseUrl, getPostRoute(post.slug));
-      const written = await writePostFile({ post, markdown, dryRun });
-
-      writtenFiles.push(written);
-      stats.successCount += 1;
-      stats.files.push(written.relativePath);
-
-      console.log(`Prepared ${post.title}`);
-      console.log(`- File: ${written.relativePath}`);
-      console.log(`- Frontmatter: title, description, pubDate${post.category ? ', category' : ''}${post.tags.length ? ', tags' : ''}`);
-      console.log(`- Planned URL: ${publishedUrl}`);
-
-      if (hasExternalMarkdownImages(markdown)) {
-        console.log('- Image note: external markdown image URLs were left unchanged and may expire.');
-      }
-
-      manifestItems.push({
-        pageId: post.pageId,
-        slug: post.slug,
-        file: path.relative(rootDir, getBlogPathForSlug(post.slug)),
-        publishedUrl,
-        success: true,
-      });
-    } catch (error) {
-      stats.failedCount += 1;
-      console.error(`Failed ${post.title || post.pageId}: ${error instanceof Error ? error.message : String(error)}`);
-      manifestItems.push({
-        pageId: post.pageId,
-        slug: post.slug,
-        success: false,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-    }
+  if (deletePosts.length > 0) {
+    console.log('Will delete:');
+  }
+  for (const post of deletePosts) {
+    await handleDeletePost({ post, dryRun, stats, manifestItems, fileChanges });
   }
 
   if (!dryRun) {
@@ -552,7 +811,7 @@ async function runGenerate({ dryRun }) {
   }
 
   printStats(stats);
-  return { stats, writtenFiles, manifestItems };
+  return { stats, fileChanges, manifestItems };
 }
 
 async function runFinalize() {
@@ -560,34 +819,49 @@ async function runFinalize() {
   const items = await readManifest();
   const stats = createStats();
 
-  stats.pendingCount = items.length;
-  stats.successCount = items.length;
-  stats.files = items.map((item) => item.file).filter(Boolean);
+  stats.publish.pendingCount = items.filter((item) => item.action === ACTION_PUBLISH).length;
+  stats.delete.pendingCount = items.filter((item) => item.action === ACTION_DELETE).length;
+  stats.publish.successCount = stats.publish.pendingCount;
+  stats.delete.successCount = stats.delete.pendingCount;
+  stats.git.createdFiles = items.filter((item) => item.action === ACTION_PUBLISH).map((item) => item.file).filter(Boolean);
+  stats.git.deletedFiles = items.filter((item) => item.action === ACTION_DELETE).map((item) => item.file).filter(Boolean);
 
   for (const item of items) {
     try {
-      await updateNotionPage({ token, pageId: item.pageId, publishedUrl: item.publishedUrl });
-      stats.notionUpdateSuccessCount += 1;
-      console.log(`Updated Notion page for slug: ${item.slug}`);
+      if (item.action === ACTION_DELETE) {
+        await updateNotionDeletedPage({ token, pageId: item.pageId });
+        stats.delete.notionUpdateSuccessCount += 1;
+        console.log(`Updated Notion delete status for slug: ${item.slug}`);
+      } else {
+        await updateNotionPublishedPage({ token, pageId: item.pageId, publishedUrl: item.publishedUrl });
+        stats.publish.notionUpdateSuccessCount += 1;
+        console.log(`Updated Notion publish status for slug: ${item.slug}`);
+      }
     } catch (error) {
-      stats.notionUpdateFailureCount += 1;
-      stats.failedCount += 1;
-      console.error(`Failed to update Notion page for slug ${item.slug}: ${error instanceof Error ? error.message : String(error)}`);
+      if (item.action === ACTION_DELETE) {
+        stats.delete.notionUpdateFailureCount += 1;
+        stats.delete.failedCount += 1;
+        console.error(`Failed to update Notion delete status for slug ${item.slug}: ${error instanceof Error ? error.message : String(error)}`);
+      } else {
+        stats.publish.notionUpdateFailureCount += 1;
+        stats.publish.failedCount += 1;
+        console.error(`Failed to update Notion publish status for slug ${item.slug}: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
 
   printStats(stats);
 
-  if (stats.notionUpdateFailureCount > 0) {
+  if (stats.publish.notionUpdateFailureCount > 0 || stats.delete.notionUpdateFailureCount > 0) {
     process.exitCode = 1;
   }
 }
 
 async function runSync() {
-  const { stats, writtenFiles, manifestItems } = await runGenerate({ dryRun: false });
+  const { stats, fileChanges, manifestItems } = await runGenerate({ dryRun: false });
 
-  if (stats.successCount === 0) {
-    if (stats.pendingCount > 0) {
+  if (getActionableSuccessCount(stats) === 0) {
+    if (getPendingCount(stats) > 0) {
       process.exitCode = 1;
     }
     return;
@@ -596,10 +870,10 @@ async function runSync() {
   try {
     await runCommand('npm', ['run', 'build']);
   } catch (error) {
-    await rollbackWrittenFiles(writtenFiles);
+    await rollbackFileChanges(fileChanges);
     await writeManifest(manifestItems.map((item) => ({ ...item, success: false, reason: 'Build failed before finalization.' })));
     throw new Error(
-      `Astro build failed after Markdown generation. Generated files were rolled back. ${
+      `Astro build failed after Notion sync changes. Generated, updated, and deleted files from this run were rolled back. ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
@@ -607,7 +881,7 @@ async function runSync() {
 
   await runFinalize();
 
-  if (stats.failedCount > 0) {
+  if (getFailureCount(stats) > 0) {
     process.exitCode = 1;
   }
 }
@@ -621,7 +895,7 @@ async function main() {
     await runGenerate({ dryRun: true });
   } else if (mode === 'generate') {
     const { stats } = await runGenerate({ dryRun: false });
-    if (stats.successCount === 0 && stats.pendingCount > 0) {
+    if (getActionableSuccessCount(stats) === 0 && getPendingCount(stats) > 0) {
       process.exitCode = 1;
     }
   } else if (mode === 'finalize') {
@@ -631,6 +905,8 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  fail(error instanceof Error ? error.message : String(error));
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    fail(error instanceof Error ? error.message : String(error));
+  });
+}

@@ -15,7 +15,8 @@
     "sync:notion:dry": "node scripts/sync-notion.mjs --dry-run",
     "sync:notion:generate": "node scripts/sync-notion.mjs --generate",
     "sync:notion:finalize": "node scripts/sync-notion.mjs --finalize",
-    "sync:notion": "node scripts/sync-notion.mjs"
+    "sync:notion": "node scripts/sync-notion.mjs",
+    "test:sync-notion": "node --test scripts/sync-notion.test.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^7.0.5",

@@ -36,10 +36,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Markdown from Notion
+      - name: Generate and delete Markdown from Notion
         run: npm run sync:notion:generate
 
-      - name: Check generated posts
+      - name: Check successful Notion sync changes
         id: generated
         shell: bash
         run: |
@@ -50,7 +50,7 @@ jobs:
         if: steps.generated.outputs.count != '0'
         run: npm run build
 
-      - name: Commit generated posts
+      - name: Commit generated and deleted posts
         if: steps.generated.outputs.count != '0'
         id: commit
         shell: bash
@@ -89,4 +89,4 @@ jobs:
 
       - name: No published changes
         if: steps.generated.outputs.count == '0'
-        run: echo "No pending Notion posts were generated."
+        run: echo "No pending Notion posts were generated or deleted."

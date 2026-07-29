@@ -1,6 +1,16 @@
 # Astro Starter Kit: Blog
 
-This repository is being extended into a Notion-backed technical blog publisher at `https://blog.hwangsoojin.cloud/`. See [Notion Publishing](docs/NOTION_PUBLISHING.md) for the local dry-run flow, GitHub Actions flow, environment variables, Pages settings, and safety rules.
+This repository is being extended into a Notion-backed technical blog publisher at `https://blog.hwangsoojin.cloud/`. See [Notion Publishing](docs/NOTION_PUBLISHING.md) for the local dry-run flow, GitHub Actions flow, environment variables, Pages settings, delete workflow, and safety rules.
+
+Important publishing statuses:
+
+- `작성 중`
+- `발행 대기`
+- `발행 완료`
+- `삭제 대기`
+- `삭제 완료`
+
+To remove a published post, set the Notion row to `삭제 대기` first. Do not delete the Notion row before the sync runs, because the automation needs the row's `Slug` to remove `src/content/blog/{Slug}.md` safely and finalize the row as `삭제 완료`.
 
 ```sh
 npm create astro@latest -- --template blog
