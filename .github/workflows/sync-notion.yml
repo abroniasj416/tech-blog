@@ -1,0 +1,91 @@
+name: Sync Notion posts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: notion-blog-sync-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      NOTION_API_TOKEN: ${{ secrets.NOTION_API_TOKEN }}
+      NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+      BLOG_BASE_URL: ${{ secrets.BLOG_BASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22.12.0"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Markdown from Notion
+        run: npm run sync:notion:generate
+
+      - name: Check generated posts
+        id: generated
+        shell: bash
+        run: |
+          count="$(node -e "const fs=require('fs'); const p='.tmp/notion-sync-result.json'; if (!fs.existsSync(p)) { console.log(0); process.exit(0); } const m=JSON.parse(fs.readFileSync(p, 'utf8')); console.log((m.items || []).filter((item) => item.success === true).length);")"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Build Astro site
+        if: steps.generated.outputs.count != '0'
+        run: npm run build
+
+      - name: Commit generated posts
+        if: steps.generated.outputs.count != '0'
+        id: commit
+        shell: bash
+        run: |
+          if git diff --quiet -- src/content/blog; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/content/blog
+          git commit -m "chore(blog): sync posts from Notion"
+          git push origin HEAD:main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Pages
+        if: steps.generated.outputs.count != '0'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: steps.generated.outputs.count != '0'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        if: steps.generated.outputs.count != '0'
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+      - name: Finalize Notion status
+        if: steps.generated.outputs.count != '0'
+        run: npm run sync:notion:finalize
+
+      - name: No published changes
+        if: steps.generated.outputs.count == '0'
+        run: echo "No pending Notion posts were generated."

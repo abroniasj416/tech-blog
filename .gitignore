@@ -12,6 +12,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# local automation output
+.tmp/
 
 # environment variables
 .env

@@ -9,13 +9,20 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "notion:data-source": "node scripts/get-notion-data-source.mjs",
+    "notion:query": "node scripts/sync-notion.mjs --query",
+    "sync:notion:dry": "node scripts/sync-notion.mjs --dry-run",
+    "sync:notion:generate": "node scripts/sync-notion.mjs --generate",
+    "sync:notion:finalize": "node scripts/sync-notion.mjs --finalize",
+    "sync:notion": "node scripts/sync-notion.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^7.0.5",
     "@astrojs/rss": "^4.0.19",
     "@astrojs/sitemap": "^3.7.3",
     "astro": "^7.1.5",
+    "dotenv": "^17.4.2",
     "sharp": "^0.35.0"
   }
 }
