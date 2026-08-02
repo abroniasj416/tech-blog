@@ -66,7 +66,7 @@ test('localizeMarkdownImages downloads external markdown images and rewrites lin
     });
 
     assert.equal(result.assets.length, 1);
-    assert.match(result.markdown, /!\[diagram\]\(\.\.\/\.\.\/notion-assets\/unit-image-post\/image-001\.png\)/);
+    assert.match(result.markdown, /!\[diagram\]\(\/notion-assets\/unit-image-post\/image-001\.png\)/);
   } finally {
     globalThis.fetch = originalFetch;
     await rm(path.resolve('.tmp', 'notion-sync-assets-dry-run', 'unit-image-post'), {

@@ -268,7 +268,7 @@ function getAssetDirForSlug(slug, dryRun) {
 }
 
 function getAssetMarkdownPath(slug, fileName) {
-  return `../../notion-assets/${slug}/${fileName}`;
+  return `/notion-assets/${slug}/${fileName}`;
 }
 
 function getAssetBackupDirForSlug(slug) {
