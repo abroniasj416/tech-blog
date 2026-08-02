@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { promisify } from 'node:util';
 
-import { getBlogPathForSlug, validateSlug } from './sync-notion.mjs';
+import { getBlogPathForSlug, localizeMarkdownImages, validateSlug } from './sync-notion.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -43,6 +43,36 @@ test('getBlogPathForSlug resolves only a markdown file inside the blog directory
     assert.equal(filePath, path.resolve(tempDir, 'safe-post.md'));
   } finally {
     await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('localizeMarkdownImages downloads external markdown images and rewrites links', async () => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(Buffer.from('fake png'), {
+      status: 200,
+      headers: {
+        'content-type': 'image/png',
+      },
+    });
+
+  try {
+    const result = await localizeMarkdownImages({
+      post: { slug: 'unit-image-post' },
+      markdown: 'Before\n\n![diagram](https://example.com/notion-image.png?download=1)\n\nAfter',
+      dryRun: true,
+      assetChanges: [],
+    });
+
+    assert.equal(result.assets.length, 1);
+    assert.match(result.markdown, /!\[diagram\]\(\.\.\/\.\.\/notion-assets\/unit-image-post\/image-001\.png\)/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    await rm(path.resolve('.tmp', 'notion-sync-assets-dry-run', 'unit-image-post'), {
+      recursive: true,
+      force: true,
+    });
   }
 });
 

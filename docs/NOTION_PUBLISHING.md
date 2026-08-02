@@ -173,6 +173,8 @@ If GitHub Pages deployment fails, Notion is not finalized.
 
 If Notion finalization fails after Pages deployment, the Markdown and deployed site have already changed. The log distinguishes publish finalization failures from delete finalization failures so you can retry `npm run sync:notion:finalize` with the existing `.tmp/notion-sync-result.json` in the same environment, or manually update the affected Notion rows.
 
-## Image limitation
+## Image handling
 
-Notion markdown image URLs are currently left unchanged. Some Notion-hosted external URLs can expire. The script reports when external markdown image URLs are detected, but it does not download images into `public/images/` yet.
+Notion markdown image URLs are temporary download URLs, so the sync downloads Markdown images into `public/notion-assets/{Slug}/` and rewrites the generated Markdown image links to those local assets.
+
+When a post is republished with the same `Slug`, that post's asset directory is replaced from the current Notion content. If an image is removed from Notion and the post is set back to the publish-pending status, the old local image file is removed during the next sync.

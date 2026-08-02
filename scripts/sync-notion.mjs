@@ -1,7 +1,7 @@
 import 'dotenv/config';
 
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,8 +28,13 @@ const GENERATED_MARKER = '<!-- notion-sync: generated -->';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const blogDir = path.join(rootDir, 'src', 'content', 'blog');
+const publicDir = path.join(rootDir, 'public');
+const notionAssetsDir = path.join(publicDir, 'notion-assets');
 const tmpDir = path.join(rootDir, '.tmp');
 const dryRunDir = path.join(tmpDir, 'notion-sync-dry-run');
+const dryRunAssetsDir = path.join(tmpDir, 'notion-sync-assets-dry-run');
+const assetRollbackDir = path.join(tmpDir, 'notion-sync-asset-rollback');
+const assetStagingDir = path.join(tmpDir, 'notion-sync-assets-staging');
 const manifestPath = path.join(tmpDir, 'notion-sync-result.json');
 
 function fail(message) {
@@ -256,6 +261,160 @@ function renderMarkdownFile(post, markdown) {
 
 function hasExternalMarkdownImages(markdown) {
   return /!\[[^\]]*\]\(https?:\/\/[^)]+\)/i.test(markdown);
+}
+
+function getAssetDirForSlug(slug, dryRun) {
+  return path.join(dryRun ? dryRunAssetsDir : notionAssetsDir, slug);
+}
+
+function getAssetMarkdownPath(slug, fileName) {
+  return `../../notion-assets/${slug}/${fileName}`;
+}
+
+function getAssetBackupDirForSlug(slug) {
+  return path.join(assetRollbackDir, slug);
+}
+
+function getImageExtension({ url, contentType }) {
+  const contentTypeToExtension = new Map([
+    ['image/jpeg', '.jpg'],
+    ['image/png', '.png'],
+    ['image/gif', '.gif'],
+    ['image/webp', '.webp'],
+    ['image/svg+xml', '.svg'],
+    ['image/avif', '.avif'],
+  ]);
+  const normalizedContentType = contentType?.split(';')[0]?.trim().toLowerCase() ?? '';
+  const extensionFromContentType = contentTypeToExtension.get(normalizedContentType);
+
+  if (extensionFromContentType) {
+    return extensionFromContentType;
+  }
+
+  try {
+    const extensionFromUrl = path.extname(new URL(url).pathname).toLowerCase();
+    if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.avif'].includes(extensionFromUrl)) {
+      return extensionFromUrl === '.jpeg' ? '.jpg' : extensionFromUrl;
+    }
+  } catch {
+    // Fall through to a safe default when the URL cannot be parsed.
+  }
+
+  return '.jpg';
+}
+
+async function directoryExists(dirPath) {
+  try {
+    return (await stat(dirPath)).isDirectory();
+  } catch (error) {
+    if (error?.code === 'ENOENT') return false;
+
+    throw error;
+  }
+}
+
+async function backupAssetDir({ slug, dryRun, assetChanges }) {
+  if (dryRun) {
+    return;
+  }
+
+  const assetDir = getAssetDirForSlug(slug, false);
+  const backupDir = getAssetBackupDirForSlug(slug);
+  const existed = await directoryExists(assetDir);
+
+  await rm(backupDir, { recursive: true, force: true });
+
+  if (existed) {
+    await mkdir(path.dirname(backupDir), { recursive: true });
+    await cp(assetDir, backupDir, { recursive: true });
+  }
+
+  assetChanges.push({ slug, assetDir, backupDir, existed });
+}
+
+async function rollbackAssetChanges(assetChanges) {
+  for (const change of assetChanges.toReversed()) {
+    await rm(change.assetDir, { recursive: true, force: true });
+
+    if (change.existed) {
+      await mkdir(path.dirname(change.assetDir), { recursive: true });
+      await cp(change.backupDir, change.assetDir, { recursive: true });
+    }
+
+    await rm(change.backupDir, { recursive: true, force: true });
+  }
+}
+
+async function downloadImageAsset({ url, slug, index, outputDir, finalDir }) {
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Image download failed with HTTP ${response.status} ${response.statusText}.`);
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  const extension = getImageExtension({ url, contentType });
+  const fileName = `image-${String(index).padStart(3, '0')}${extension}`;
+  const filePath = path.join(outputDir, fileName);
+  const bytes = Buffer.from(await response.arrayBuffer());
+
+  await mkdir(outputDir, { recursive: true });
+  await writeFile(filePath, bytes);
+
+  return {
+    fileName,
+    relativePath: path.relative(rootDir, path.join(finalDir, fileName)),
+    markdownPath: getAssetMarkdownPath(slug, fileName),
+  };
+}
+
+export async function localizeMarkdownImages({ post, markdown, dryRun, assetChanges }) {
+  const imagePattern = /!\[([^\]\r\n]*)\]\((<https?:\/\/[^>\s)]+>|https?:\/\/[^\s)]+)(?:\s+["'][^"']*["'])?\)/gi;
+  const matches = [...markdown.matchAll(imagePattern)];
+  const finalAssetDir = getAssetDirForSlug(post.slug, dryRun);
+  const outputDir = dryRun ? finalAssetDir : path.join(assetStagingDir, post.slug);
+
+  if (matches.length === 0) {
+    await backupAssetDir({ slug: post.slug, dryRun, assetChanges });
+    await rm(finalAssetDir, { recursive: true, force: true });
+    return { markdown, assets: [] };
+  }
+
+  await rm(outputDir, { recursive: true, force: true });
+
+  let localized = '';
+  let cursor = 0;
+  const assets = [];
+
+  for (const [index, match] of matches.entries()) {
+    const [fullMatch, altText, rawUrl] = match;
+    const matchIndex = match.index ?? cursor;
+    const url = rawUrl.startsWith('<') && rawUrl.endsWith('>') ? rawUrl.slice(1, -1) : rawUrl;
+    const asset = await downloadImageAsset({
+      url,
+      slug: post.slug,
+      index: index + 1,
+      outputDir,
+      finalDir: finalAssetDir,
+    });
+
+    localized += markdown.slice(cursor, matchIndex);
+    localized += `![${altText}](${asset.markdownPath})`;
+    cursor = matchIndex + fullMatch.length;
+    assets.push(asset);
+  }
+
+  localized += markdown.slice(cursor);
+
+  if (!dryRun) {
+    await backupAssetDir({ slug: post.slug, dryRun, assetChanges });
+    await rm(finalAssetDir, { recursive: true, force: true });
+    await mkdir(path.dirname(finalAssetDir), { recursive: true });
+    await cp(outputDir, finalAssetDir, { recursive: true });
+    await rm(outputDir, { recursive: true, force: true });
+  }
+
+  return { markdown: localized, assets };
 }
 
 async function queryPostsByStatus({ token, dataSourceId, status }) {
@@ -634,7 +793,7 @@ async function runQuery() {
   return { stats };
 }
 
-async function handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, manifestItems, fileChanges }) {
+async function handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, manifestItems, fileChanges, assetChanges }) {
   const validationErrors = validatePublishPost(post);
 
   if (validationErrors.length > 0) {
@@ -654,8 +813,9 @@ async function handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, mani
 
   try {
     const markdown = await retrieveMarkdown({ token, pageId: post.pageId });
+    const localized = await localizeMarkdownImages({ post, markdown, dryRun, assetChanges });
     const publishedUrl = joinUrl(blogBaseUrl, getPostRoute(post.slug));
-    const written = await writePostFile({ post, markdown, dryRun });
+    const written = await writePostFile({ post, markdown: localized.markdown, dryRun });
 
     fileChanges.push(written);
     stats.publish.successCount += 1;
@@ -671,8 +831,13 @@ async function handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, mani
     console.log(`- Frontmatter: title, description, pubDate${post.category ? ', category' : ''}${post.tags.length ? ', tags' : ''}`);
     console.log(`- Planned URL: ${publishedUrl}`);
 
-    if (hasExternalMarkdownImages(markdown)) {
-      console.log('- Image note: external markdown image URLs were left unchanged and may expire.');
+    if (localized.assets.length > 0) {
+      console.log(`- Images localized: ${localized.assets.length}`);
+      for (const asset of localized.assets) {
+        console.log(`  - ${asset.relativePath}`);
+      }
+    } else if (hasExternalMarkdownImages(markdown)) {
+      console.log('- Image note: external markdown image URLs were detected but no assets were localized.');
     }
 
     manifestItems.push({
@@ -681,6 +846,7 @@ async function handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, mani
       title: post.title,
       slug: post.slug,
       file: path.relative(rootDir, getBlogPathForSlug(post.slug)),
+      assets: localized.assets.map((asset) => asset.relativePath),
       publishedUrl,
       plannedStatus: DONE_STATUS,
       success: true,
@@ -779,6 +945,7 @@ async function runGenerate({ dryRun }) {
   const stats = createStats();
   const manifestItems = [];
   const fileChanges = [];
+  const assetChanges = [];
 
   stats.publish.pendingCount = publishPosts.length;
   stats.delete.pendingCount = deletePosts.length;
@@ -789,13 +956,14 @@ async function runGenerate({ dryRun }) {
 
   if (dryRun) {
     await rm(dryRunDir, { recursive: true, force: true });
+    await rm(dryRunAssetsDir, { recursive: true, force: true });
   }
 
   if (publishPosts.length > 0) {
     console.log('Will generate:');
   }
   for (const post of publishPosts) {
-    await handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, manifestItems, fileChanges });
+    await handlePublishPost({ token, blogBaseUrl, post, dryRun, stats, manifestItems, fileChanges, assetChanges });
   }
 
   if (deletePosts.length > 0) {
@@ -811,7 +979,7 @@ async function runGenerate({ dryRun }) {
   }
 
   printStats(stats);
-  return { stats, fileChanges, manifestItems };
+  return { stats, fileChanges, assetChanges, manifestItems };
 }
 
 async function runFinalize() {
@@ -858,7 +1026,7 @@ async function runFinalize() {
 }
 
 async function runSync() {
-  const { stats, fileChanges, manifestItems } = await runGenerate({ dryRun: false });
+  const { stats, fileChanges, assetChanges, manifestItems } = await runGenerate({ dryRun: false });
 
   if (getActionableSuccessCount(stats) === 0) {
     if (getPendingCount(stats) > 0) {
@@ -871,6 +1039,7 @@ async function runSync() {
     await runCommand('npm', ['run', 'build']);
   } catch (error) {
     await rollbackFileChanges(fileChanges);
+    await rollbackAssetChanges(assetChanges);
     await writeManifest(manifestItems.map((item) => ({ ...item, success: false, reason: 'Build failed before finalization.' })));
     throw new Error(
       `Astro build failed after Notion sync changes. Generated, updated, and deleted files from this run were rolled back. ${
@@ -880,6 +1049,7 @@ async function runSync() {
   }
 
   await runFinalize();
+  await rm(assetRollbackDir, { recursive: true, force: true });
 
   if (getFailureCount(stats) > 0) {
     process.exitCode = 1;
