@@ -173,6 +173,19 @@ If GitHub Pages deployment fails, Notion is not finalized.
 
 If Notion finalization fails after Pages deployment, the Markdown and deployed site have already changed. The log distinguishes publish finalization failures from delete finalization failures so you can retry `npm run sync:notion:finalize` with the existing `.tmp/notion-sync-result.json` in the same environment, or manually update the affected Notion rows.
 
+## Paragraph rendering
+
+Notion exports consecutive text blocks with single newlines. The Astro Markdown
+processor uses `scripts/lib/remark-notion-paragraphs.mjs` to render those lines
+as separate top-level paragraphs in files marked `<!-- notion-sync: generated -->`.
+Inline `<br>` breaks are retained. Code, lists, quotes, and tables are left intact;
+this is not a complete converter for every Notion block type or nested block.
+Hand-written Markdown without the marker keeps its normal soft-break behavior.
+Existing generated posts receive this fix on the next build without changing
+their Notion status or regenerating their Markdown.
+
+Run `npm run test:sync-notion` to check both publishing and paragraph rendering.
+
 ## Image handling
 
 Notion markdown image URLs are temporary download URLs, so the sync downloads Markdown images into `public/notion-assets/{Slug}/` and rewrites the generated Markdown image links to those local assets.

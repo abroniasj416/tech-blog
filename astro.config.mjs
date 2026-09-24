@@ -1,13 +1,16 @@
 // @ts-check
 
 import mdx from '@astrojs/mdx';
+import { unified } from '@astrojs/markdown-remark';
 import sitemap from '@astrojs/sitemap';
 import { defineConfig, fontProviders } from 'astro/config';
+import remarkNotionParagraphs from './scripts/lib/remark-notion-paragraphs.mjs';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://blog.hwangsoojin.cloud',
 	integrations: [mdx(), sitemap()],
+	markdown: { processor: unified({ remarkPlugins: [remarkNotionParagraphs] }) },
 	fonts: [
 		{
 			provider: fontProviders.local(),
