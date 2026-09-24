@@ -3,7 +3,9 @@
 // all pages through the use of the <BaseHead /> component.
 import '../styles/global.css';
 import type { ImageMetadata } from 'astro';
+import { getImage } from 'astro:assets';
 import FallbackImage from '../assets/blog-placeholder-1.jpg';
+import ProfileImage from '../assets/profile-transparent.png';
 import { SITE_TITLE } from '../consts';
 
 interface Props {
@@ -17,13 +19,13 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const withBase = (pathname: string) => `${basePath}${pathname}`;
 
 const { title, description, image = FallbackImage } = Astro.props;
+const favicon = await getImage({ src: ProfileImage, width: 64, height: 64, format: 'png' });
 ---
 
 <!-- Global Metadata -->
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<link rel="icon" type="image/svg+xml" href={withBase('/favicon.svg')} />
-<link rel="icon" href={withBase('/favicon.ico')} />
+<link rel="icon" type="image/png" sizes="64x64" href={favicon.src} />
 <link rel="sitemap" href={withBase('/sitemap-index.xml')} />
 <link
 	rel="alternate"
