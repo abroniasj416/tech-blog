@@ -1,22 +1,32 @@
 ---
 import { Image } from 'astro:assets';
-import profileImage from '../assets/profile.webp';
+import profileImage from '../assets/profile-transparent.png';
 ---
 
-<Image
-	class="profile-image"
-	src={profileImage}
-	alt="황수진 프로필 — 노란 배경의 초록색 도마뱀 캐릭터"
-	width={164}
-	height={164}
-/>
+<div class="profile-frame">
+	<Image
+		class="profile-image"
+		src={profileImage}
+		alt="황수진 프로필 — 초록색 도마뱀 캐릭터"
+		width={500}
+		height={500}
+	/>
+</div>
 
 <style>
+	.profile-frame {
+		width: 160px;
+		height: 168px;
+		margin: 0 auto 2rem;
+		overflow: hidden;
+	}
+
 	.profile-image {
 		display: block;
-		width: 82px;
-		height: 82px;
-		margin: 0 auto 2rem;
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
+		/* Hide the source image's transparent margins without changing the asset. */
+		transform: scale(1.5);
 	}
 </style>
