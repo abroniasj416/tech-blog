@@ -178,8 +178,11 @@ If Notion finalization fails after Pages deployment, the Markdown and deployed s
 Notion exports consecutive text blocks with single newlines. The Astro Markdown
 processor uses `scripts/lib/remark-notion-paragraphs.mjs` to render those lines
 as separate top-level paragraphs in files marked `<!-- notion-sync: generated -->`.
-Inline `<br>` breaks are retained. Code, lists, quotes, and tables are left intact;
-this is not a complete converter for every Notion block type or nested block.
+Inline `<br>` breaks are retained. Markdown following an HTML table is parsed
+separately, so headings, emphasis and images after a table still render.
+Unindented text after a list becomes a separate paragraph instead of being
+absorbed into the last list item. Indented list content, code, quotes, and table
+cells are preserved. This is not a complete converter for every Notion block type.
 Hand-written Markdown without the marker keeps its normal soft-break behavior.
 Existing generated posts receive this fix on the next build without changing
 their Notion status or regenerating their Markdown.
