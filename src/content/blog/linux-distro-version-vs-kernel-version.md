@@ -16,8 +16,6 @@ notionPageId: "3b0410cd-c737-804a-9cae-e9dee3d39e2c"
 1. 배포판 버전
 2. Linux 커널 버전
 이 둘은 같은 의미가 아니다.
-![](/notion-assets/linux-distro-version-vs-kernel-version/image-001.webp)
-<empty-block/>
 ---
 ## 1. 배포판 버전
 배포판 버전은 Ubuntu, Rocky Linux, RHEL과 같은 **완성된 운영체제 제품의 버전**을 의미한다.
