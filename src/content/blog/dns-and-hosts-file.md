@@ -1,5 +1,5 @@
 ---
-title: "DNS와 Hosts File(호스트 파일)"
+title: "[Network] DNS와 Hosts File(호스트 파일)"
 description: "도메인 이름을 IP 주소로 해석하는 DNS의 계층 구조와 동작 원리를 정리하고, 로컬 이름 매핑 파일인 Hosts File과의 차이·우선순위·활용 사례까지 함께 설명합니다."
 pubDate: "2026-02-10"
 category: "Network"

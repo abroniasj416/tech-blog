@@ -1,5 +1,5 @@
 ---
-title: "여러 서버에 동일한 작업을 똑똑하게 하려면 — VPC Peering과 Ansible로 보안 조치 자동화하기"
+title: "[Cloud] 여러 서버에 동일한 작업을 똑똑하게 하려면 - VPC Peering과 Ansible로 보안 조치 자동화하기"
 description: "고객사 자산에 추가 구성을 최소화하면서 20대가 넘는 서버에 보안 조치를 일괄 적용한 경험을 정리합니다. 회사 계정의 제어 서버와 고객사 VPC를 Peering으로 연결하고, Ansible로 사설 통신을 통한 반복 작업을 자동화한 구성과 실행 예제를 소개합니다."
 pubDate: "2026-07-30"
 category: "Cloud"

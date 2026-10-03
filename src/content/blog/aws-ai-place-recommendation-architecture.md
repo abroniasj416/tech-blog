@@ -1,5 +1,5 @@
 ---
-title: "AI 장소 추천 서비스의 AWS 설계: 서버·검색·외부 API 연결하기"
+title: "[Cloud] AI 장소 추천 서비스의 AWS 설계: 서버·검색·외부 API 연결하기"
 description: "AI 장소 추천 서비스를 위한 AWS 인프라 설계 과정을 정리했습니다. Private Subnet의 EC2와 NAT Gateway를 통한 외부 API 연동, RDS·OpenSearch·S3의 역할 분리, RAG 검색 흐름과 확장·모니터링을 고려한 설계 이유를 소개합니다."
 pubDate: "2026-06-30"
 category: "Cloud"

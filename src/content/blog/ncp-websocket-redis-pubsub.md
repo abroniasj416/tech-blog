@@ -1,5 +1,5 @@
 ---
-title: "다중 WAS 환경의 실시간 협업 구현 — WebSocket과 Redis Pub/Sub"
+title: "[Cloud] 다중 WAS 환경의 실시간 협업 구현 — WebSocket과 Redis Pub/Sub"
 description: "서로 다른 WAS에 연결된 사용자에게 여행 계획 변경 사항을 전달하기 위해 WebSocket과 Redis Pub/Sub을 적용한 경험을 정리했습니다. PostgreSQL과 Redis의 역할 분리, NCP 인프라 구성, 연결이 끊겼을 때 고려할 점을 소개합니다."
 pubDate: "2026-04-30"
 category: "Cloud"

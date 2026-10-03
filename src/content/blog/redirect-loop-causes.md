@@ -1,5 +1,5 @@
 ---
-title: "리다이렉트 루프는 왜 발생할까? HTTPS 설정부터 쿠키와 CDN 캐시까지"
+title: "[Network] 리다이렉트 루프는 왜 발생할까? HTTPS 설정부터 쿠키와 CDN 캐시까지"
 description: "HTTPS 설정 충돌, Cloudflare Flexible SSL, 오래된 쿠키와 CDN 캐시로 발생하는 리다이렉트 루프의 원인과 해결 방법을 예시로 정리합니다."
 pubDate: "2026-08-12"
 category: "Network"

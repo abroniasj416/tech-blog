@@ -1,7 +1,7 @@
 ---
-title: "배포판과 커널을 구분하는 방법"
+title: "[Linux] 배포판과 커널을 구분하는 방법"
 description: "리눅스 배포판과 커널의 차이를 구분하고, 둘의 관계를 쉽게 정리합니다."
-pubDate: "2026-08-03"
+pubDate: "2025-11-30"
 category: "Linux"
 tags:
   - "Linux"

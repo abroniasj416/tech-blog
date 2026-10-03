@@ -1,5 +1,5 @@
 ---
-title: "백업 시간마다 멈추던 서버, Object Storage 마운트 구조를 바꾸다"
+title: "[Cloud] 백업 시간마다 멈추던 서버, Object Storage 마운트 구조를 바꾸다"
 description: "백업 시간마다 CPU 사용률이 급등하며 서버가 멈추던 장애를 분석했습니다. Object Storage 마운트 경로를 사용하던 백업 스크립트를 API 기반 업로드 방식으로 변경해 반복 장애를 해결한 과정을 정리했습니다."
 pubDate: "2026-06-10"
 category: "Cloud"

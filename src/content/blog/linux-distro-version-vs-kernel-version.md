@@ -1,7 +1,7 @@
 ---
-title: "배포판 버전과 커널 버전은 서로 다른 개념이다"
+title: "[Linux] 배포판 버전과 커널 버전은 서로 다른 개념이다"
 description: "리눅스 배포판 버전과 커널 버전의 차이와 각각의 확인 방법을 정리합니다."
-pubDate: "2026-08-07"
+pubDate: "2025-11-26"
 category: "Linux"
 tags:
   - "Linux"

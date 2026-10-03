@@ -1,5 +1,5 @@
 ---
-title: "Burp Suite 진단 결과를 HTTP·TLS·DNS 관점에서 분석하고 개선한 경험"
+title: "[Cloud] Burp Suite 진단 결과를 HTTP·TLS·DNS 관점에서 분석하고 개선한 경험"
 description: "LMS 웹 서비스의 보안 진단 결과를 HTTP·TLS·DNS와 인증 구조 관점에서 분석했습니다. HSTS 적용, CORS 설정 정리, 에러 응답 개선 등을 통해 정보성 항목을 포함한 보고 건수를 40건에서 3건으로 줄이고, 남은 항목의 원인을 검토한 경험을 정리합니다."
 pubDate: "2026-03-01"
 category: "Cloud"

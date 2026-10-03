@@ -1,5 +1,5 @@
 ---
-title: "Cockpit이란? Linux 서버를 웹에서 관리하는 방법"
+title: "[Linux] Cockpit이란? Linux 서버를 웹에서 관리하는 방법"
 description: "Linux 서버를 브라우저에서 관리할 수 있는 Cockpit의 개념과 동작 방식, Rocky Linux에서 활성화하고 접속하는 과정을 정리합니다."
 pubDate: "2026-10-01"
 category: "Linux"

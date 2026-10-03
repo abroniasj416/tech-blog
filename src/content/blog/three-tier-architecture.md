@@ -1,5 +1,5 @@
 ---
-title: "3-Tier란? 웹·애플리케이션·DB를 나누는 이유"
+title: "[Cloud] 3-Tier란? 웹·애플리케이션·DB를 나누는 이유"
 description: "3-Tier 아키텍처의 구조와 각 계층의 역할을 살펴보고, 웹·애플리케이션·데이터베이스를 분리하는 이유를 설명합니다."
 pubDate: "2026-02-01"
 category: "Cloud"

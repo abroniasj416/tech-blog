@@ -1,5 +1,5 @@
 ---
-title: "UDP 서비스가 죽어도 Load Balancer 헬스체크는 정상? NCP LB 트러블슈팅 과정"
+title: "[Cloud] UDP 서비스가 죽어도 Load Balancer 헬스체크는 정상? NCP LB 트러블슈팅 과정"
 description: "NCP Load Balancer의 TCP 헬스체크 한계를 보완하기 위해 UDP 포트 상태를 수집하고, Cloud Insight와 Cloud Functions로 타겟 제외·복구를 자동화하는 구조를 정리합니다."
 pubDate: "2026-09-16"
 category: "Cloud"

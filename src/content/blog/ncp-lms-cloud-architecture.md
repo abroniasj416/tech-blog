@@ -1,5 +1,5 @@
 ---
-title: "제안요청서를 NCP 아키텍처로 옮기기: LMS 인프라 설계·구축기"
+title: "[Cloud] 제안요청서를 NCP 아키텍처로 옮기기: LMS 인프라 설계·구축기"
 description: "나라장터 제안요청서를 바탕으로 NCP에 LMS 인프라를 설계·구축한 경험을 정리했습니다. 3-Tier 구성부터 네트워크 분리, 접근 제어, Auto Scaling, 콘텐츠 전송과 CI/CD까지 요구사항을 실제 아키텍처에 반영한 과정을 소개합니다."
 pubDate: "2026-03-02"
 category: "Cloud"
