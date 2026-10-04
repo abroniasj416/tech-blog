@@ -260,7 +260,44 @@ function renderMarkdownFile(post, markdown) {
 }
 
 function hasExternalMarkdownImages(markdown) {
-  return /!\[[^\]]*\]\(https?:\/\/[^)]+\)/i.test(markdown);
+  return findExternalMarkdownImages(markdown).length > 0;
+}
+
+function findExternalMarkdownImages(markdown) {
+  const images = [];
+  const imageStartPattern = /!\[/g;
+  let match;
+
+  while ((match = imageStartPattern.exec(markdown)) !== null) {
+    let offset = match.index + 2;
+    let bracketDepth = 1;
+
+    // Notion captions can contain links: ![text [link](url)](image-url).
+    // Find the outer closing bracket before reading the image destination.
+    for (; offset < markdown.length && bracketDepth > 0; offset += 1) {
+      if (markdown[offset] === '\\') {
+        offset += 1;
+      } else if (markdown[offset] === '[') {
+        bracketDepth += 1;
+      } else if (markdown[offset] === ']') {
+        bracketDepth -= 1;
+      }
+    }
+
+    if (bracketDepth !== 0) continue;
+
+    const destination = /^\((<https?:\/\/[^>\s)]+>|https?:\/\/[^\s)]+)(?:\s+["'][^"']*["'])?\)/i.exec(markdown.slice(offset));
+    if (!destination) continue;
+
+    const rawUrl = destination[1];
+    const wrapped = rawUrl.startsWith('<') && rawUrl.endsWith('>');
+    const url = wrapped ? rawUrl.slice(1, -1) : rawUrl;
+    const start = offset + 1 + (wrapped ? 1 : 0);
+    images.push({ url, start, end: start + url.length });
+    imageStartPattern.lastIndex = offset + destination[0].length;
+  }
+
+  return images;
 }
 
 function getAssetDirForSlug(slug, dryRun) {
@@ -369,12 +406,11 @@ async function downloadImageAsset({ url, slug, index, outputDir, finalDir }) {
 }
 
 export async function localizeMarkdownImages({ post, markdown, dryRun, assetChanges }) {
-  const imagePattern = /!\[([^\]\r\n]*)\]\((<https?:\/\/[^>\s)]+>|https?:\/\/[^\s)]+)(?:\s+["'][^"']*["'])?\)/gi;
-  const matches = [...markdown.matchAll(imagePattern)];
+  const images = findExternalMarkdownImages(markdown);
   const finalAssetDir = getAssetDirForSlug(post.slug, dryRun);
   const outputDir = dryRun ? finalAssetDir : path.join(assetStagingDir, post.slug);
 
-  if (matches.length === 0) {
+  if (images.length === 0) {
     await backupAssetDir({ slug: post.slug, dryRun, assetChanges });
     await rm(finalAssetDir, { recursive: true, force: true });
     return { markdown, assets: [] };
@@ -386,21 +422,18 @@ export async function localizeMarkdownImages({ post, markdown, dryRun, assetChan
   let cursor = 0;
   const assets = [];
 
-  for (const [index, match] of matches.entries()) {
-    const [fullMatch, altText, rawUrl] = match;
-    const matchIndex = match.index ?? cursor;
-    const url = rawUrl.startsWith('<') && rawUrl.endsWith('>') ? rawUrl.slice(1, -1) : rawUrl;
+  for (const [index, image] of images.entries()) {
     const asset = await downloadImageAsset({
-      url,
+      url: image.url,
       slug: post.slug,
       index: index + 1,
       outputDir,
       finalDir: finalAssetDir,
     });
 
-    localized += markdown.slice(cursor, matchIndex);
-    localized += `![${altText}](${asset.markdownPath})`;
-    cursor = matchIndex + fullMatch.length;
+    localized += markdown.slice(cursor, image.start);
+    localized += asset.markdownPath;
+    cursor = image.end;
     assets.push(asset);
   }
 

@@ -76,6 +76,60 @@ test('localizeMarkdownImages downloads external markdown images and rewrites lin
   }
 });
 
+test('localizeMarkdownImages downloads image URLs, not links inside Notion captions', async (t) => {
+  const requestedUrls = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requestedUrls.push(url);
+    return new Response('fake png', { headers: { 'content-type': 'image/png' } });
+  });
+  const slug = 'unit-linked-image-captions';
+  t.after(() => rm(path.resolve('.tmp', 'notion-sync-assets-dry-run', slug), { recursive: true, force: true }));
+  const captions = [
+    '[**example.com**](http://example.com)에 등록된 DNS A 레코드',
+    '**hosts 수정 전 **[**example.com**](http://example.com)** 접속 모습**',
+    '[**http://example.com으로**](http://example.com으로)** 접속한 모습**',
+  ];
+  const urls = captions.map((_, index) => `https://example.com/image-${index}.png?download=1&signature=fake`);
+  const markdown = `Before\n\n${captions.map((caption, index) => `![${caption}](${urls[index]})`).join('\n')}\n\nAfter`;
+
+  const result = await localizeMarkdownImages({ post: { slug }, markdown, dryRun: true, assetChanges: [] });
+
+  assert.deepEqual(requestedUrls, urls);
+  assert.equal(result.assets.length, captions.length);
+  assert.equal(result.markdown, urls.reduce(
+    (source, url, index) => source.replace(url, `/notion-assets/${slug}/image-${String(index + 1).padStart(3, '0')}.png`),
+    markdown,
+  ));
+});
+
+test('localizeMarkdownImages preserves escaped brackets, angle URLs, titles and adjacent links', async (t) => {
+  const requestedUrls = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requestedUrls.push(url);
+    return new Response('fake png', { headers: { 'content-type': 'image/png' } });
+  });
+  const slug = 'unit-image-caption-syntax';
+  t.after(() => rm(path.resolve('.tmp', 'notion-sync-assets-dry-run', slug), { recursive: true, force: true }));
+  const url = 'https://example.com/image.png?download=1&signature=fake';
+  const markdown = String.raw`[before](https://example.com) ![\[DNS\] [first [nested]](https://example.com/first) and [second](https://example.com/second)](<${url}> "image title") [after](https://example.com/after)`;
+
+  const result = await localizeMarkdownImages({ post: { slug }, markdown, dryRun: true, assetChanges: [] });
+
+  assert.deepEqual(requestedUrls, [url]);
+  assert.equal(result.markdown, markdown.replace(url, `/notion-assets/${slug}/image-001.png`));
+});
+
+test('localizeMarkdownImages does not download caption links when the image is local or incomplete', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => assert.fail('No external image should be downloaded'));
+  const slug = 'unit-local-image-captions';
+  const markdown = '![caption [link](https://example.com/caption)](/local.png)\n\n![[link](https://example.com/incomplete)';
+
+  const result = await localizeMarkdownImages({ post: { slug }, markdown, dryRun: true, assetChanges: [] });
+
+  assert.deepEqual(result.assets, []);
+  assert.equal(result.markdown, markdown);
+});
+
 test('git add plus cached diff detects new, modified, and deleted blog files', async () => {
   const tempDir = await mkTempDir();
 
