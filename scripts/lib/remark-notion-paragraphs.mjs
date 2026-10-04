@@ -34,7 +34,8 @@ export default function remarkNotionParagraphs() {
     // HTML tables consume following Markdown until a blank line in CommonMark.
     // Parse the cell contents and swallowed tail without changing table structure.
     function repairBlocks(nodes, source, reparseBlocks = true) {
-      return nodes.flatMap((node) => {
+      const repaired = [];
+      for (const node of nodes) {
         if (node.type === 'heading' && node.depth === 2 && node.position) {
           const raw = source.slice(node.position.start.offset, node.position.end.offset);
           const lastLine = raw.split(/\r?\n/).at(-1);
@@ -42,19 +43,25 @@ export default function remarkNotionParagraphs() {
           // can instead be parsed as a setext heading; restore both blocks.
           // Source lines inside blockquotes may retain their > prefixes.
           if (/^[ \t>]*-{3,}[ \t]*$/.test(lastLine)) {
-            return [
+            repaired.push(
               { type: 'paragraph', children: node.children },
               { type: 'thematicBreak' },
-            ];
+            );
+            continue;
           }
         }
-        if (reparseBlocks && node.type === 'html' && /^\s*<table[\s>]/i.test(node.value)) {
-          const end = /<\/table>[ \t]*(?:\r?\n|$)/i.exec(node.value);
+        if (reparseBlocks && node.type === 'html' && node.position && /^\s*<table[\s>]/i.test(node.value)) {
+          const raw = source.slice(node.position.start.offset, node.position.end.offset);
+          const end = /<\/table>[ \t]*(?:\r?\n|$)/i.exec(raw);
           if (end) {
             const boundary = end.index + end[0].length;
-            const tail = node.value.slice(boundary);
+            // A blank line inside code can end the original HTML node before
+            // the closing fence. Reparse the entire remaining source together
+            // and replace its old siblings so that code stays in one block.
+            const tail = source.slice(node.position.start.offset + boundary);
             return [
-              ...parseTableCells(node.value.slice(0, boundary).trimEnd()),
+              ...repaired,
+              ...parseTableCells(raw.slice(0, boundary).trimEnd()),
               ...repairBlocks(processor.parse(tail).children, tail),
             ];
           }
@@ -64,15 +71,20 @@ export default function remarkNotionParagraphs() {
           // In Notion, child blocks are indented. Unindented prose after a
           // list is a new block, not CommonMark's lazy list continuation.
           const separated = raw.replace(/\n(?=\S)(?![-+*] |\d+[.)] )/g, '\n\n');
-          if (separated !== raw) return repairBlocks(processor.parse(separated).children, separated);
+          if (separated !== raw) {
+            repaired.push(...repairBlocks(processor.parse(separated).children, separated));
+            continue;
+          }
         }
         if (['blockquote', 'list', 'listItem'].includes(node.type)) {
           // Nested source slices retain outer quote/list prefixes. Only repair
           // dividers here; reparsing those slices would change the nesting.
-          return [{ ...node, children: repairBlocks(node.children, source, false) }];
+          repaired.push({ ...node, children: repairBlocks(node.children, source, false) });
+          continue;
         }
-        return [node];
-      });
+        repaired.push(node);
+      }
+      return repaired;
     }
 
     tree.children = repairBlocks(tree.children, String(file)).flatMap((node) => {

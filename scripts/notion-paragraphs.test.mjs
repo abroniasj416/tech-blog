@@ -138,6 +138,42 @@ test('table and Markdown examples inside code are unchanged', async () => {
   assert.equal((await render(source)).replace(marker.trim() + '\n', ''), await render(source, false));
 });
 
+test('code following a Notion HTML table retains blank lines, indentation and literal Markdown', async () => {
+  for (const newline of ['\n', '\r\n']) {
+    for (const fence of ['```', '~~~']) {
+      const code = '[Debian 계열]\nDebian\n└── Ubuntu\n\n[Red Hat 계열]\n    └── RHEL\n\n<table>literal</table>\n## literal heading\n**literal emphasis**';
+      const source = '<table>\n<tr><td>[link](https://example.com)</td></tr>\n</table>\n## Map\n' + fence + 'text\n' + code + '\n' + fence + '\nafter code\n<table>\n<tr><td>last cell</td></tr>\n</table>\nlast paragraph';
+      const html = await render(source.replaceAll('\n', newline));
+      const expected = await render(('```text\n' + code + '\n```').replaceAll('\n', newline), false);
+      assert.ok(html.includes(expected), 'the entire code block should render unchanged');
+      assert.equal((html.match(/<pre\b/g) || []).length, 1);
+      assert.equal((html.match(/<table>/g) || []).length, 2);
+      assert.equal((html.match(/<h2\b/g) || []).length, 1);
+      assert.match(html, /<a href="https:\/\/example.com">link<\/a>/);
+      assert.match(html, /<\/pre>\s*<p>after code<\/p>\s*<table>/);
+      assert.match(html, /<\/table>\s*<p>last paragraph<\/p>/);
+    }
+  }
+});
+
+test('published Linux distribution map keeps all five families in one complete code block', async () => {
+  const source = await readFile(new URL('../src/content/blog/linux-distribution-families-and-relationships.md', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf(marker.trim()));
+  const html = await render(body, false);
+  const blocks = [...html.matchAll(/<pre\b[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/g)];
+  assert.equal(blocks.length, 2, 'only the map and the Red Hat timeline should be code blocks');
+  for (const family of ['Debian 계열', 'Red Hat 계열', 'SUSE 계열', 'Arch 계열', '기타 독립 배포판']) {
+    assert.ok(blocks[0][1].includes(`[${family}]`), `${family} should be inside the map`);
+    assert.ok(!html.includes(`<p>[${family}]</p>`));
+  }
+  const originalMap = /```plain text\r?\n([\s\S]*?)\r?\n```/.exec(body)[1];
+  const expected = await render('```plain text\n' + originalMap + '\n```', false);
+  assert.ok(html.includes(expected), 'preserve the complete original map, including spacing');
+  assert.match(html, /<\/pre>\s*<p>Red Hat 계열은/);
+  assert.equal((html.match(/<table\b/g) || []).length, 4);
+  assert.equal((html.match(/<h2\b/g) || []).length, 7);
+});
+
 test('entire published 3-Tier article retains all headings, images, tables and list boundaries', async () => {
   const source = await readFile(new URL('../src/content/blog/three-tier-architecture.md', import.meta.url), 'utf8');
   const body = source.slice(source.indexOf(marker.trim()));
