@@ -1,5 +1,5 @@
 ---
-title: "[Network] DNS를 바꾸지 않고 도메인 접속 대상 변경하기: Windows hosts 파일"
+title: "[Network] DNS를 바꾸지 않고 도메인 접속 대상 변경하기: Windows hosts 파일 실습"
 description: "Windows hosts 파일에 도메인과 IP를 직접 매핑해 실제 DNS 레코드를 변경하지 않고도 로컬 PC의 접속 대상을 바꾸는 과정을 실습합니다. ping·curl·브라우저를 통해 hosts 반영 여부와 HTTP/HTTPS 차이까지 확인합니다."
 pubDate: "2026-03-24"
 category: "Network"

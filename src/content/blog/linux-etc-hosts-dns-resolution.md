@@ -1,5 +1,5 @@
 ---
-title: "[Linux] DNS를 바꾸지 않고 도메인 접속 대상 변경하기: Linux /etc/hosts 파일"
+title: "[Linux] DNS를 바꾸지 않고 도메인 접속 대상 변경하기: Linux /etc/hosts 파일 실습"
 description: "Linux의 /etc/hosts를 수정해 실제 DNS 레코드는 그대로 둔 채 로컬 이름 해석 결과를 바꾸는 과정을 실습합니다. nslookup·dig와 getent·ping·curl의 결과 차이를 통해 /etc/hosts와 DNS의 동작 차이도 함께 확인합니다."
 pubDate: "2026-03-10"
 category: "Linux"
