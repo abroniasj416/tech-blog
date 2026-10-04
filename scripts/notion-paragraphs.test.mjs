@@ -86,6 +86,46 @@ test('HTML table does not swallow following headings, images, emphasis or anothe
   assert.match(html, /<p>last<\/p>/);
 });
 
+test('Notion table cells render hyperlinks with their labels and destinations', async () => {
+  const source = '<table header-row="true">\n<tr><td>API</td><td>Role</td></tr>\n<tr><td>[getTargetList](https://example.com/gettargetlist)</td><td>List targets</td></tr>\n</table>';
+  const html = await render(source);
+  assert.match(html, /<td>\s*<a href="https:\/\/example.com\/gettargetlist">getTargetList<\/a>\s*<\/td>/);
+  assert.doesNotMatch(html, /\[getTargetList\]\(/);
+  assert.equal((html.match(/<tr>/g) || []).length, 2);
+  assert.equal((html.match(/<td>/g) || []).length, 4);
+});
+
+test('Notion table cell formatting preserves complex URLs, inline code, breaks and HTML attributes', async () => {
+  const source = '<table><tr><th scope="col">**API**</th><td colspan="2">[**guide**](https://example.com/a_(b)?x=1&y=2 "API guide")<br>`undo <id>` and *text* &amp; more</td></tr></table>';
+  const html = await render(source);
+  assert.match(html, /<th scope="col">\s*<strong>API<\/strong>\s*<\/th>/);
+  assert.match(html, /<td colspan="2">/);
+  assert.match(html, /<a href="https:\/\/example.com\/a_\(b\)\?x=1&#x26;y=2" title="API guide">\s*<strong>guide<\/strong>\s*<\/a>/);
+  assert.match(html, /<br>/);
+  assert.match(html, /<code>undo &#x3C;id><\/code>/);
+  assert.match(html, /<em>text<\/em>/);
+  assert.doesNotMatch(html, /<id>/);
+});
+
+test('Notion table links coexist with existing HTML links and trailing paragraphs and dividers', async () => {
+  const source = '<table><tr><td><a href="https://example.com/existing">existing</a> and [second](https://example.com/second)</td></tr></table>\nafter\n---\n## Heading\n<table><tr><td>[third](https://example.com/third)</td></tr></table>';
+  const html = await render(source);
+  assert.equal((html.match(/<a href=/g) || []).length, 3);
+  assert.equal((html.match(/<table>/g) || []).length, 2);
+  assert.match(html, /<\/table>\s*<p>after<\/p>\s*<hr>\s*<h2/);
+});
+
+test('ordinary HTML tables and Markdown link examples inside code remain literal', async () => {
+  const table = '<table><tr><td>[label](https://example.com)</td></tr></table>';
+  const ordinary = await render(table, false);
+  assert.match(ordinary, /\[label\]\(https:\/\/example.com\)/);
+  assert.doesNotMatch(ordinary, /<a href=/);
+  const source = '```html\n' + table + '\n```\n\n<table><tr><td>`[label](https://example.com)`</td></tr></table>';
+  const html = await render(source);
+  assert.doesNotMatch(html, /<a href=/);
+  assert.match(html, /<td>\s*<code>\[label\]\(https:\/\/example.com\)<\/code>\s*<\/td>/);
+});
+
 test('unindented prose following Notion lists becomes separate paragraphs', async () => {
   const html = await render('1. first\n2. second\nafter list\nnext paragraph\n\n- parent\n  - child\n  continuation\nafter bullets');
   assert.match(html, /<\/ol>\s*<p>after list<\/p>\s*<p>next paragraph<\/p>/);
@@ -120,4 +160,14 @@ test('published rpm/yum/dnf article renders the reported sentence as body text b
   assert.match(html, /<p>그래서 <code>yum install<\/code>을 입력해도 실제로는 dnf가 동작한다\.<\/p>\s*<hr>/);
   assert.doesNotMatch(html, /<h2[^>]*>그래서/);
   assert.match(html, /<h2[^>]*>dnf install은 실제로 무슨 일을 할까\?<\/h2>/);
+});
+
+test('published NLB article keeps all three API documentation links in their table cells', async () => {
+  const source = await readFile(new URL('../src/content/blog/ncp-udp-nlb-target-automation.md', import.meta.url), 'utf8');
+  const html = await render(source.slice(source.indexOf(marker.trim())), false);
+  for (const label of ['getTargetList', 'removeTarget', 'addTarget']) {
+    const url = `https://api.ncloud-docs.com/docs/networking-vloadbalancer-targetgroup-${label.toLowerCase()}`;
+    assert.ok(html.includes(`<a href="${url}">${label}</a>`), `${label} should be a hyperlink`);
+    assert.ok(!html.includes(`[${label}](${url})`), `${label} should not show literal Markdown`);
+  }
 });

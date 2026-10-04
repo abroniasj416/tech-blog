@@ -8,8 +8,31 @@ export default function remarkNotionParagraphs() {
     );
     if (!generated) return;
 
+    function parseTableCells(value) {
+      const nodes = [];
+      const cellPattern = /(<(td|th)\b(?:[^>"']|"[^"]*"|'[^']*')*>)([\s\S]*?)(<\/\2\s*>)/gi;
+      let cursor = 0;
+
+      for (const match of value.matchAll(cellPattern)) {
+        const content = match[3];
+        const children = processor.parse(content).children.flatMap(
+          (node) => node.type === 'paragraph' ? node.children : [node],
+        );
+        if (children.length === 0 || (children.length === 1 && children[0].type === 'text' && children[0].value === content)) continue;
+
+        // Keep the table/cell tags and attributes as HTML, but let the normal
+        // Markdown pipeline render links, emphasis and code inside each cell.
+        const start = match.index + match[1].length;
+        nodes.push({ type: 'html', value: value.slice(cursor, start) }, ...children);
+        cursor = start + content.length;
+      }
+
+      nodes.push({ type: 'html', value: value.slice(cursor) });
+      return nodes;
+    }
+
     // HTML tables consume following Markdown until a blank line in CommonMark.
-    // Reparse only the swallowed tail; leave table cells and code untouched.
+    // Parse the cell contents and swallowed tail without changing table structure.
     function repairBlocks(nodes, source, reparseBlocks = true) {
       return nodes.flatMap((node) => {
         if (node.type === 'heading' && node.depth === 2 && node.position) {
@@ -30,12 +53,10 @@ export default function remarkNotionParagraphs() {
           if (end) {
             const boundary = end.index + end[0].length;
             const tail = node.value.slice(boundary);
-            if (tail.trim()) {
-              return [
-                { ...node, value: node.value.slice(0, boundary).trimEnd() },
-                ...repairBlocks(processor.parse(tail).children, tail),
-              ];
-            }
+            return [
+              ...parseTableCells(node.value.slice(0, boundary).trimEnd()),
+              ...repairBlocks(processor.parse(tail).children, tail),
+            ];
           }
         }
         if (reparseBlocks && node.type === 'list' && node.position) {
