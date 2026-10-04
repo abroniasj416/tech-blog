@@ -22,6 +22,48 @@ test('ordinary Markdown keeps soft breaks', async () => {
   assert.equal(await render('first\nsecond', false), '<p>first\nsecond</p>');
 });
 
+test('Notion paragraph followed by a divider stays a paragraph and a horizontal rule', async () => {
+  const html = await render('그래서 `yum install`을 입력해도 실제로는 dnf가 동작한다.\n---\n## 다음 제목');
+  assert.match(html, /<p>그래서 <code>yum install<\/code>을 입력해도 실제로는 dnf가 동작한다\.<\/p>\s*<hr>/);
+  assert.equal((html.match(/<h2\b/g) || []).length, 1);
+});
+
+test('Notion divider preserves separate paragraphs and inline formatting with CRLF', async () => {
+  const html = await render('first **paragraph**\r\n[link](https://example.com) and `code`<br>continued\r\n---\r\nafter');
+  assert.match(html, /<p>first <strong>paragraph<\/strong><\/p>\s*<p><a href="https:\/\/example.com">link<\/a> and <code>code<\/code><br>continued<\/p>\s*<hr>\s*<p>after<\/p>/);
+  assert.doesNotMatch(html, /<h2\b/);
+});
+
+test('Notion divider is repaired in content reparsed after HTML tables and lists', async () => {
+  const html = await render('<table>\n<tr><td>cell</td></tr>\n</table>\nafter table\n---\n## Heading\n1. item\nafter list\n---\nlast');
+  assert.match(html, /<\/table>\s*<p>after table<\/p>\s*<hr>/);
+  assert.match(html, /<\/ol>\s*<p>after list<\/p>\s*<hr>\s*<p>last<\/p>/);
+  assert.equal((html.match(/<h2\b/g) || []).length, 1);
+});
+
+test('Notion dividers inside quotes and list items do not turn their paragraphs into headings', async () => {
+  const html = await render('> quote\n> ---\n\n- item\n  ---');
+  assert.match(html, /<blockquote>\s*<p>quote<\/p>\s*<hr>\s*<\/blockquote>/);
+  assert.match(html, /<li>item\s*<hr>\s*<\/li>/);
+  assert.doesNotMatch(html, /<h2\b/);
+});
+
+test('ordinary Markdown setext headings and explicit Notion headings are preserved', async () => {
+  assert.match(await render('Title\n---', false), /<h2[^>]*>Title<\/h2>/);
+  const source = '# First\n\n## Second\n\n### Third\n\nUnderlined\n===\n\n---';
+  assert.equal((await render(source)).replace(marker.trim() + '\n', ''), await render(source, false));
+});
+
+test('divider examples inside fenced, indented and inline code stay unchanged', async () => {
+  const source = '```markdown\nparagraph\n---\n```\n\n~~~text\nparagraph\n---\n~~~\n\n    paragraph\n    ---\n\n`paragraph\n---`\n\n\\---';
+  assert.equal((await render(source)).replace(marker.trim() + '\n', ''), await render(source, false));
+});
+
+test('walking nested blocks preserves quoted lists and nested code examples', async () => {
+  const source = '> - first\n> - second\n>\n> paragraph\n\n- example\n  ```markdown\n  paragraph\n  ---\n  ```';
+  assert.equal((await render(source)).replace(marker.trim() + '\n', ''), await render(source, false));
+});
+
 test('explicit inline breaks and formatted text survive', async () => {
   const html = await render('first<br>second\n[link](https://example.com) and `code`');
   assert.match(html, /<p>first<br>second<\/p>/);
@@ -69,4 +111,13 @@ test('entire published 3-Tier article retains all headings, images, tables and l
   assert.doesNotMatch(html, /### |!\[/);
   assert.match(html, /<strong>어떤 범위를 기준으로 무엇을 분리했는지<\/strong>/);
   assert.match(html, /<p>그 질문에 답할 수 있을 때, 계층을 나눈 이유도 설명할 수 있다\.<\/p>/);
+});
+
+test('published rpm/yum/dnf article renders the reported sentence as body text before a divider', async () => {
+  const source = await readFile(new URL('../src/content/blog/rpm-yum-dnf-package-management.md', import.meta.url), 'utf8');
+  const body = source.slice(source.indexOf(marker.trim()));
+  const html = await render(body, false);
+  assert.match(html, /<p>그래서 <code>yum install<\/code>을 입력해도 실제로는 dnf가 동작한다\.<\/p>\s*<hr>/);
+  assert.doesNotMatch(html, /<h2[^>]*>그래서/);
+  assert.match(html, /<h2[^>]*>dnf install은 실제로 무슨 일을 할까\?<\/h2>/);
 });

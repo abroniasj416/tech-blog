@@ -10,9 +10,22 @@ export default function remarkNotionParagraphs() {
 
     // HTML tables consume following Markdown until a blank line in CommonMark.
     // Reparse only the swallowed tail; leave table cells and code untouched.
-    function repairBlocks(nodes, source) {
+    function repairBlocks(nodes, source, reparseBlocks = true) {
       return nodes.flatMap((node) => {
-        if (node.type === 'html' && /^\s*<table[\s>]/i.test(node.value)) {
+        if (node.type === 'heading' && node.depth === 2 && node.position) {
+          const raw = source.slice(node.position.start.offset, node.position.end.offset);
+          const lastLine = raw.split(/\r?\n/).at(-1);
+          // Notion headings use # markers. A paragraph followed by a divider
+          // can instead be parsed as a setext heading; restore both blocks.
+          // Source lines inside blockquotes may retain their > prefixes.
+          if (/^[ \t>]*-{3,}[ \t]*$/.test(lastLine)) {
+            return [
+              { type: 'paragraph', children: node.children },
+              { type: 'thematicBreak' },
+            ];
+          }
+        }
+        if (reparseBlocks && node.type === 'html' && /^\s*<table[\s>]/i.test(node.value)) {
           const end = /<\/table>[ \t]*(?:\r?\n|$)/i.exec(node.value);
           if (end) {
             const boundary = end.index + end[0].length;
@@ -25,12 +38,17 @@ export default function remarkNotionParagraphs() {
             }
           }
         }
-        if (node.type === 'list' && node.position) {
+        if (reparseBlocks && node.type === 'list' && node.position) {
           const raw = source.slice(node.position.start.offset, node.position.end.offset);
           // In Notion, child blocks are indented. Unindented prose after a
           // list is a new block, not CommonMark's lazy list continuation.
           const separated = raw.replace(/\n(?=\S)(?![-+*] |\d+[.)] )/g, '\n\n');
-          if (separated !== raw) return processor.parse(separated).children;
+          if (separated !== raw) return repairBlocks(processor.parse(separated).children, separated);
+        }
+        if (['blockquote', 'list', 'listItem'].includes(node.type)) {
+          // Nested source slices retain outer quote/list prefixes. Only repair
+          // dividers here; reparsing those slices would change the nesting.
+          return [{ ...node, children: repairBlocks(node.children, source, false) }];
         }
         return [node];
       });
