@@ -132,9 +132,9 @@ rpm -q tree
 ---
 ## 로컬 .rpm 파일도 dnf로 설치하자
 로컬에 있는 `.rpm` 파일은 `rpm -ivh`로도 설치할 수 있지만, `dnf install`을 쓰는 편이 낫다.
-bash
 ```bash
-sudo rpm -ivh ./tree-*.rpm       # 의존 패키지가 없으면 에러로 멈춤sudo dnf install ./tree-*.rpm    # 부족한 의존 패키지를 저장소에서 자동으로 채워 줌
+sudo rpm -ivh ./tree-*.rpm       # 의존 패키지가 없으면 에러로 멈춤
+sudo dnf install ./tree-*.rpm    # 부족한 의존 패키지를 저장소에서 자동으로 채워 줌
 ```
 `./`처럼 경로를 붙여 주면 dnf가 저장소의 패키지 이름이 아니라 로컬 파일로 인식한다.
 ---
