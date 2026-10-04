@@ -64,9 +64,11 @@ Rocky Linux 서버를 다루다 보면 패키지를 설치할 때 `rpm`, `yum`, 
 `rpm`은 이미 디스크에 있는 `.rpm` 파일을 설치·삭제하고, rpm 데이터베이스를 조회하는 도구다.
 가장 큰 특징은 **의존성을 자동으로 해결하지 않는다**는 점이다. A 패키지가 B 패키지를 필요로 하면 rpm은 "B가 없다"는 에러를 내고 멈춘다. 필요한 패키지를 직접 찾아서 함께 설치해야 한다. 또 저장소 개념이 없기 때문에 인터넷에서 패키지를 받아오지도 않는다.
 그래서 요즘은 설치보다는 **조회 용도**로 더 많이 쓴다.
-bash
 ```bash
-rpm -qa | grep nginx                 # 설치된 패키지 목록에서 검색rpm -qi nginx                        # 패키지 상세 정보rpm -ql nginx                        # 패키지가 설치한 파일 목록rpm -qf /etc/nginx/nginx.conf        # 이 파일이 어느 패키지 소속인지
+rpm -qa | grep nginx                 # 설치된 패키지 목록에서 검색
+rpm -qi nginx                        # 패키지 상세 정보
+rpm -ql nginx                        # 패키지가 설치한 파일 목록
+rpm -qf /etc/nginx/nginx.conf        # 이 파일이 어느 패키지 소속인지
 ```
 위 명령어들은 모두 **rpm 데이터베이스**를 읽는다. 그래서 설치하지 않은 `.rpm` 파일은 여기에 나타나지 않는다.
 ---
@@ -77,9 +79,9 @@ RHEL/CentOS 7까지 기본 패키지 관리자였지만, Python 2 기반이고 �
 ## dnf — yum의 후속작
 `dnf`는 yum을 대체하기 위해 만들어졌다. **libsolv**라는 의존성 해결 엔진을 사용해서 yum보다 빠르고 정확하다. 명령어 문법은 yum과 거의 같게 만들어져서 그대로 옮겨 쓸 수 있다.
 재미있는 점은 Rocky Linux 9에서 `yum`이 사실상 `dnf`를 가리키는 링크라는 것이다.
-bash
 ```bash
-ls -l /usr/bin/yum# /usr/bin/yum -> dnf-3
+ls -l /usr/bin/yum
+# /usr/bin/yum -> dnf-3
 ```
 그래서 `yum install`을 입력해도 실제로는 dnf가 동작한다.
 ---
@@ -94,18 +96,34 @@ ls -l /usr/bin/yum# /usr/bin/yum -> dnf-3
 ---
 ## dnf download — 설치 없이 다운로드만
 다운로드만 하고 싶을 때는 `dnf download`를 쓴다. 패키지 파일을 현재 디렉터리에 저장만 하고, 설치는 하지 않는다.
-bash
 ```bash
-dnf download nginx             # nginx 패키지 파일 하나만dnf download --resolve nginx   # 의존 패키지까지 함께 (이미 설치된 것은 제외)
+dnf download nginx             # nginx 패키지 파일 하나만
+dnf download --resolve nginx   # 의존 패키지까지 함께 (이미 설치된 것은 제외)
 ```
 `dnf install`과 달리 `dnf download`는 기본적으로 **지정한 패키지 하나만** 받는다는 점에 주의해야 한다. 의존 패키지까지 필요하다면 `--resolve` 옵션을 붙인다.
 이렇게 받아 둔 파일은 인터넷이 되지 않는 **폐쇄망 서버**로 옮겨서 설치할 때 유용하다.
 ---
 ## 직접 확인해 보기: 다운로드만 한 상태 vs 설치한 상태
 앞에서 정리한 "파일이 있다 ≠ 설치되었다"를 직접 확인해 볼 수 있다.
-bash
 ```bash
-# 1. 패키지 파일만 다운로드dnf download treels tree-*.rpm# tree-1.8.0-10.el9.x86_64.rpm  → 파일은 있다# 2. 설치 여부 확인rpm -q tree# package tree is not installed  → 아직 설치되지 않았다# 3. 설치되지 않은 패키지 파일 안의 내용 조회rpm -qpl tree-*.rpm# 4. 로컬 파일로 설치sudo dnf install ./tree-*.rpm# 5. 다시 확인rpm -q tree# tree-1.8.0-10.el9.x86_64  → 이제 설치된 것으로 조회된다
+# 1. 패키지 파일만 다운로드
+dnf download tree
+ls tree-*.rpm
+# tree-1.8.0-10.el9.x86_64.rpm  → 파일은 있다
+
+# 2. 설치 여부 확인
+rpm -q tree
+# package tree is not installed  → 아직 설치되지 않았다
+
+# 3. 설치되지 않은 패키지 파일 안의 내용 조회
+rpm -qpl tree-*.rpm
+
+# 4. 로컬 파일로 설치
+sudo dnf install ./tree-*.rpm
+
+# 5. 다시 확인
+rpm -q tree
+# tree-1.8.0-10.el9.x86_64  → 이제 설치된 것으로 조회된다
 ```
 여기서 3번의 `-p` 옵션이 핵심이다.
 - `p`가 **없으면** → rpm 데이터베이스에 등록된 **설치된 패키지**를 조회한다.
