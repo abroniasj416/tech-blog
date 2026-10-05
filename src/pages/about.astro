@@ -1,121 +1,554 @@
 ---
+import { Image } from 'astro:assets';
+import portrait from '../assets/about-portrait.jpg';
 import BaseHead from '../components/BaseHead.astro';
 import Footer from '../components/Footer.astro';
 import Header from '../components/Header.astro';
-import ProfileMark from '../components/ProfileMark.astro';
 import { GITHUB_URL, SITE_TITLE } from '../consts';
+
+const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+const projects = [
+	{
+		title: 'AWS 기반 AI 장소 추천 서비스',
+		category: 'cloud-infrastructure',
+		context: 'AWS · 팀 프로젝트',
+		description: '팀 프로젝트에서 Node.js·Express 백엔드 개발과 AWS 인프라 배포를 담당했습니다. ELB·EC2 Auto Scaling과 Private Subnet을 구성하고, RDS 데이터 저장·OpenSearch 벡터 검색·S3 파일 저장을 연계했습니다.',
+		technologies: 'AWS, EC2, Auto Scaling, ELB, RDS, OpenSearch, S3, NAT Gateway',
+		slug: 'aws-ai-place-recommendation-architecture',
+	},
+	{
+		title: 'NCP 기반 학습관리시스템 인프라 구축',
+		category: 'cloud-infrastructure',
+		context: 'NCP',
+		description: '제안 요청서를 바탕으로 WEB·WAS·DB와 인증 서버를 분리해 인프라를 구축했습니다. 로드밸런싱·Auto Scaling·DB 이중화를 구성하고, 서비스 요청 경로와 관리자 접근 경로를 분리했습니다.',
+		technologies: 'NCP, L7·L4 Load Balancer, Auto Scaling, Cloud DB, SSL VPN, Bastion Host, VPC Peering',
+		slug: 'ncp-lms-cloud-architecture',
+	},
+	{
+		title: 'UDP 포트 상태 기반 NLB 타깃 제어 자동화',
+		category: 'operations',
+		context: '헬스체크 제약 대응',
+		description: 'TCP 방식의 헬스체크로 UDP 서비스를 확인하기 어려운 제약을 분석했습니다. Cloud Insight와 Cloud Functions를 연계해 UDP 포트의 리스닝 상태에 따라 NLB 타깃을 자동 제외·재등록하는 기능을 구현했습니다.',
+		technologies: 'NLB, Cloud Insight, Cloud Functions, Linux',
+		slug: 'ncp-udp-nlb-target-automation',
+	},
+	{
+		title: 'Ansible 기반 서버 보안 설정 자동화',
+		category: 'automation',
+		description: 'Ansible 제어 서버와 대상 서버 사이에 VPC Peering으로 사설 통신 경로를 구성했습니다. Private Subnet을 포함한 고객사 서버 20대 이상에 동일한 보안 설정을 일괄 적용했습니다.',
+		technologies: 'Ansible, VPC Peering, Private Subnet',
+		slug: 'ncp-ansible-vpc-peering-automation',
+	},
+	{
+		title: 'Object Storage 접근 방식 개선 및 서버 장애 대응',
+		category: 'operations',
+		context: '서버 장애 대응',
+		description: '반복되는 CPU 사용률 급등과 서버 멈춤 현상을 조사했습니다. 백업 스크립트가 Object Storage 마운트 경로를 탐색하며 부하를 유발할 가능성을 확인하고, 스토리지 접근을 마운트 방식에서 API 호출 방식으로 변경했습니다.',
+		technologies: 'Rocky Linux, Bash, Object Storage, API',
+		slug: 'ncp-object-storage-backup-troubleshooting',
+	},
+	{
+		title: '서버 정리·DB 통합을 통한 클라우드 비용 최적화 검토',
+		category: 'cost-optimization',
+		description: '리소스 사용률·청구 내역·로드밸런서 연결 상태를 분석해 서버 정리와 DB 통합 방안을 제안했습니다. 이중화 유지 여부에 따른 조건부 조치를 구분하고, 월 약 84만 원·약 11%의 예상 절감 효과를 산정했습니다.',
+		technologies: '리소스 사용률 분석, 서버 정리, DB 통합, 예상 비용 산정',
+		technologyLabel: '핵심 내용',
+		slug: 'cloud-cost-optimization-case',
+	},
+	{
+		title: 'Redis Pub/Sub 기반 실시간 여행 계획 협업 서비스',
+		category: 'cloud-infrastructure',
+		context: 'NCP',
+		description: '여러 사용자가 지도 기반 여행 계획을 함께 수정하는 서비스입니다. 서로 다른 WAS에 연결된 사용자에게 변경 사항을 전달하도록 Redis Pub/Sub와 WebSocket을 연계하고, PostgreSQL을 데이터 저장소로 구성했습니다.',
+		technologies: 'NCP, Redis Pub/Sub, WebSocket, PostgreSQL',
+		slug: 'ncp-websocket-redis-pubsub',
+	},
+	{
+		title: 'Burp Suite 기반 웹 서비스 보안 진단 및 재진단',
+		category: 'security',
+		description: '관리자·일반 사용자 계정의 웹 요청과 응답을 점검하고, CSRF·TLS·HSTS·CORS 등의 항목을 확인했습니다. 세 차례 진단에서 정보성 항목을 포함한 전체 탐지 건수는 40건에서 3건으로 감소했으며, 최종 진단에는 중간 등급 3건이 남았습니다.',
+		technologies: 'Burp Suite, HTTP, TLS, 웹 보안 점검',
+		slug: 'burp-suite-web-security-analysis',
+	},
+];
+const portfolioCategories = [
+	{ id: 'cloud-infrastructure', title: '클라우드 인프라 구축', label: '클라우드 구축' },
+	{ id: 'operations', title: '장애 대응 및 운영 개선', label: '장애 대응' },
+	{ id: 'automation', title: '운영 자동화', label: '운영 자동화' },
+	{ id: 'cost-optimization', title: '비용 최적화 검토', label: '비용 검토' },
+	{ id: 'security', title: '보안 진단', label: '보안 진단' },
+];
 ---
 
 <!doctype html>
 <html lang="ko-KR">
 	<head>
-		<BaseHead title={`About | ${SITE_TITLE}`} description="황수진의 관심 분야와 기술 블로그 소개입니다." />
+		<BaseHead title={`About | ${SITE_TITLE}`} description="클라우드 엔지니어 황수진의 소개와 포트폴리오입니다. AWS·NCP 인프라 구축, 운영 자동화, 장애 대응과 보안 진단 경험을 소개합니다." />
 	</head>
 	<body>
 		<Header />
 		<main class="about-page">
-			<ProfileMark />
-			<h1>안녕하세요, 황수진입니다.</h1>
-			<p class="intro">
-				클라우드 환경을 운영하고 기술을 학습하며, 이해한 내용을 다시 설명할 수 있을 때까지
-				기록합니다.
-			</p>
+			<div class="profile-hero">
+				<div class="profile-copy">
+					<p class="eyebrow">ABOUT</p>
+					<h1>황수진</h1>
+					<p class="profile-role">Cloud Engineer</p>
+					<a class="github-link" href={GITHUB_URL} target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+				</div>
+				<Image class="portrait" src={portrait} alt="클라우드 엔지니어 황수진의 프로필 사진" width={354} height={472} loading="eager" />
+			</div>
 
-			<section>
-				<h2>Interests</h2>
-				<ul>
-					<li>NAVER Cloud Platform</li>
-					<li>Linux</li>
-					<li>Network</li>
-					<li>Docker</li>
-					<li>Kubernetes</li>
-					<li>Security</li>
-					<li>Database</li>
-					<li>DevOps Automation</li>
-				</ul>
+			<nav class="about-nav" aria-label="About 페이지 목차">
+				<a href="#introduction">소개</a>
+				<a href="#portfolio">포트폴리오</a>
+				<a href="#activities">활동</a>
+				<a href="#education">학력</a>
+			</nav>
+
+			<section id="introduction" class="about-section" aria-labelledby="introduction-title">
+				<div class="section-heading">
+					<span class="section-number" aria-hidden="true">01</span>
+					<h2 id="introduction-title">소개</h2>
+				</div>
+				<div class="section-content introduction">
+					<p class="greeting">안녕하세요, 클라우드 엔지니어 황수진입니다.</p>
+					<p>AWS·NCP 기반 인프라 구축과 고객사 장애 대응, 서버 보안 설정 자동화, 비용 최적화 방안 검토를 경험했습니다. 서비스 구성과 운영 제약을 살펴보고, 문제에 맞는 해결 방법을 적용합니다.</p>
+				</div>
 			</section>
 
-			<section>
-				<h2>Profile</h2>
-				<dl>
-					<div>
-						<dt>Location</dt>
-						<dd>Seoul, Korea</dd>
-					</div>
-					<div>
-						<dt>GitHub</dt>
-						<dd><a href={GITHUB_URL} target="_blank" rel="noreferrer">{GITHUB_URL}</a></dd>
-					</div>
-					<div>
-						<dt>Blog</dt>
-						<dd><a href="https://blog.hwangsoojin.cloud">https://blog.hwangsoojin.cloud</a></dd>
-					</div>
-				</dl>
+			<section id="portfolio" class="about-section portfolio" aria-labelledby="portfolio-title">
+				<div class="section-heading">
+					<h2 id="portfolio-title">포트폴리오</h2>
+				</div>
+				<nav class="portfolio-nav" aria-label="포트폴리오 카테고리">
+					{portfolioCategories.map((category) => (
+						<a href={`#${category.id}`}>{category.label}</a>
+					))}
+				</nav>
+				{portfolioCategories.map((category, index) => (
+					<section id={category.id} class="portfolio-category" aria-labelledby={`${category.id}-title`}>
+						<div class="section-heading category-heading">
+							<span class="category-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
+							<h3 id={`${category.id}-title`}>{category.title}</h3>
+						</div>
+						<div class="project-list">
+							{projects.filter((project) => project.category === category.id).map((project) => (
+								<article class="project">
+									<div class="project-title">
+										{project.context && <p class="project-context">{project.context}</p>}
+										<h4>{project.title}</h4>
+									</div>
+									<div class="project-description">
+										<p>{project.description}</p>
+										<p class="project-technologies"><strong>{project.technologyLabel ?? '사용 기술'}:</strong> {project.technologies}</p>
+									</div>
+									<a class="project-link" href={`${basePath}/blog/${project.slug}/`} aria-label={`${project.title} 상세 글 보기`}>상세 글 <span aria-hidden="true">↗</span></a>
+								</article>
+							))}
+						</div>
+					</section>
+				))}
 			</section>
+			<div class="background-sections">
+				<section id="activities" class="about-section" aria-labelledby="activities-title">
+					<div class="section-heading">
+						<span class="section-number" aria-hidden="true">03</span>
+						<h2 id="activities-title">활동</h2>
+					</div>
+					<div class="section-content background-content">
+						<div class="background-entry">
+							<h3>AWS Student Builder Group at UOS</h3>
+							<p>Core Team · 2026.08 – 현재</p>
+							<p>기술 세션 운영 · AWS 실습 자료 제작 및 발표</p>
+						</div>
+						<div class="background-entry">
+							<h3>Cloud Club 9기</h3>
+							<p>수료 · 2026.03 – 2026.06</p>
+							<p>Linux 시스템 관리 학습 및 실습</p>
+						</div>
+						<div class="background-entry">
+							<h3>네이버클라우드 아카데미 1기</h3>
+							<p>최우수 수료 · 2025.10 – 2025.11</p>
+							<p>NCP 기반 3-Tier 인프라 구축 실습</p>
+						</div>
+					</div>
+				</section>
+				<section id="education" class="about-section" aria-labelledby="education-title">
+					<div class="section-heading">
+						<span class="section-number" aria-hidden="true">04</span>
+						<h2 id="education-title">학력</h2>
+					</div>
+					<div class="section-content background-content">
+						<div class="background-entry">
+							<h3>서울시립대학교</h3>
+							<p>컴퓨터과학부</p>
+							<p>2027.02 졸업 예정</p>
+						</div>
+					</div>
+				</section>
+			</div>
 		</main>
 		<Footer />
 	</body>
 </html>
 
 <style>
+	:global(.header-inner) {
+		border-bottom: 1px solid #dedede;
+	}
 	.about-page {
-		max-width: 720px;
+		padding-top: 2.8rem;
+		padding-bottom: 0;
 	}
-
-	.about-page h1 {
-		margin-top: 0.8rem;
-		font-size: clamp(1.7rem, 4vw, 2.4rem);
+	.profile-hero {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 3rem;
+		padding: 0 2rem 2.8rem;
 	}
-
-	.intro {
-		margin-top: 1rem;
+	.eyebrow {
+		margin-bottom: 0.7rem;
+		color: var(--color-accent);
+		font-size: 0.95rem;
+		font-weight: 700;
+		letter-spacing: 0.04em;
+	}
+	h1 {
+		font-size: clamp(2.8rem, 5vw, 4rem);
+		font-weight: 900;
+		letter-spacing: -0.06em;
+	}
+	.profile-role {
+		margin-top: 0.4rem;
+		font-size: clamp(1.25rem, 2.8vw, 1.85rem);
+		font-weight: 750;
+		letter-spacing: -0.03em;
+		line-height: 1.4;
+	}
+	.github-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.8rem;
+		margin-top: 1.5rem;
+		padding: 0.5rem 1.2rem;
+		border: 1px solid var(--color-text);
+		border-radius: 3px;
+		font-weight: 700;
+	}
+	.github-link:hover {
+		border-color: var(--color-accent);
+	}
+	.portrait {
+		display: block;
+		flex-shrink: 0;
+		width: 177px;
+		height: auto;
+		border: 1px solid var(--color-border);
+	}
+	.about-nav {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.5rem clamp(1.2rem, 4vw, 3rem);
+		padding: 1rem;
+		border-top: 1px solid #dedede;
+		border-bottom: 1px solid #dedede;
 		color: var(--color-muted);
-		font-size: 1.05rem;
+		font-size: 0.95rem;
+	}
+	.about-section {
+		padding: 2rem;
+		border-bottom: 1px solid #dedede;
+	}
+	.section-heading {
+		display: flex;
+		align-items: baseline;
+		gap: 1.5rem;
+		margin-bottom: 1.4rem;
+	}
+	.section-number {
+		flex-shrink: 0;
+		width: 1.7rem;
+		color: var(--color-subtle);
+		font-size: 1.25rem;
+		font-variant-numeric: tabular-nums;
+	}
+	h2 {
+		font-size: 1.8rem;
+		font-weight: 800;
+		letter-spacing: -0.04em;
+	}
+	.section-content {
+		margin-left: 3.2rem;
+	}
+	.introduction {
+		max-width: 800px;
+		padding-bottom: 0.3rem;
+		color: var(--color-muted);
 		line-height: 1.9;
 	}
-
-	section {
-		margin-top: 3rem;
+	.greeting {
+		margin-bottom: 0.65rem;
+		color: var(--color-text);
+		font-size: 1.15rem;
+		font-weight: 700;
 	}
-
-	h2 {
+	.portfolio {
+		padding-right: 0;
+		padding-left: 0;
+	}
+	.portfolio > .section-heading {
+		padding: 0 2rem;
+	}
+	.portfolio-nav {
+		display: flex;
+		justify-content: center;
+		padding: 1rem 0;
+		border-radius: 5px;
+		background: #f5f5f7;
+		font-size: 0.95rem;
+	}
+	.portfolio-nav a {
+		padding: 0 1.8rem;
+		line-height: 1.4;
+		text-align: center;
+	}
+	.portfolio-nav a + a {
+		border-left: 1px solid #b8b8b8;
+	}
+	.portfolio-category {
+		padding: 1.8rem 2rem 0;
+	}
+	.portfolio-category + .portfolio-category {
+		margin-top: 1.5rem;
+		border-top: 1px solid #dedede;
+	}
+	.category-heading {
 		margin-bottom: 1rem;
-		font-size: 1.25rem;
 	}
-
-	ul {
-		display: grid;
-		gap: 0.55rem;
-		margin: 0;
-		padding-left: 1.2rem;
-	}
-
-	dl {
-		display: grid;
-		gap: 0.75rem;
-		margin: 0;
-	}
-
-	dl div {
-		display: grid;
-		grid-template-columns: 100px 1fr;
-		gap: 1rem;
-	}
-
-	dt {
-		color: var(--color-subtle);
+	.category-heading h3 {
+		font-size: 1.65rem;
 		font-weight: 800;
+		letter-spacing: -0.04em;
+		line-height: 1.4;
 	}
-
-	dd {
-		margin: 0;
+	.category-number {
+		flex-shrink: 0;
+		width: 1.7rem;
+		color: #d94e00;
+		font-size: 1.25rem;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+	.project-list {
+		margin-left: 3.2rem;
+	}
+	.project-context {
+		margin-bottom: 0.2rem;
 		color: var(--color-muted);
+		font-size: 0.8rem;
 	}
-
+	.project {
+		display: grid;
+		grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.65fr) auto;
+		align-items: start;
+		gap: 1.8rem;
+		padding: 1.7rem 0;
+		border-bottom: 1px solid #e5e5e5;
+	}
+	.project:first-child {
+		padding-top: 0.35rem;
+	}
+	.project:last-child {
+		border-bottom: 0;
+		padding-bottom: 0.5rem;
+	}
+	h3,
+	h4 {
+		font-size: 1.05rem;
+		font-weight: 750;
+		line-height: 1.6;
+		letter-spacing: -0.025em;
+	}
+	.project-description {
+		color: var(--color-muted);
+		font-size: 0.92rem;
+		line-height: 1.85;
+	}
+	.project-technologies {
+		margin-top: 0.65rem;
+		font-size: 0.8rem;
+		line-height: 1.8;
+	}
+	.project-technologies strong {
+		font-weight: 600;
+	}
+	.project-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin-top: 0.15rem;
+		color: #d94e00;
+		font-size: 0.9rem;
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.project-link:hover,
+	.project-link:focus-visible {
+		text-decoration: underline;
+		text-underline-offset: 4px;
+	}
+	.background-sections {
+		display: grid;
+		grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+		border-bottom: 1px solid #dedede;
+	}
+	.background-sections .about-section {
+		min-width: 0;
+		margin: 2rem 0;
+		padding-top: 0;
+		padding-bottom: 0;
+		border-bottom: 0;
+	}
+	.background-sections .about-section + .about-section {
+		border-left: 1px solid #dedede;
+	}
+	.background-content {
+		display: grid;
+		gap: 1.25rem;
+		color: var(--color-muted);
+		font-size: 0.92rem;
+		line-height: 1.85;
+	}
+	.background-entry h3 {
+		margin-bottom: 0.2rem;
+	}
+	@media (max-width: 760px) {
+		.background-sections {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.background-sections .about-section {
+			margin: 0;
+			padding-top: 2rem;
+			padding-bottom: 2rem;
+		}
+		.background-sections .about-section + .about-section {
+			border-top: 1px solid #dedede;
+			border-left: 0;
+		}
+	}
+	@media (max-width: 900px) {
+		.profile-hero,
+		.about-section:not(.portfolio),
+		.portfolio-category,
+		.portfolio > .section-heading {
+			padding-left: 0.8rem;
+			padding-right: 0.8rem;
+		}
+		.project {
+			grid-template-columns: minmax(0, 1fr) auto;
+			gap: 0.65rem 1rem;
+		}
+		.project-title {
+			grid-column: 1;
+		}
+		.portfolio-nav a {
+			padding: 0 1rem;
+		}
+		.project-description {
+			grid-column: 1 / -1;
+			grid-row: 2;
+		}
+		.project-link {
+			grid-column: 2;
+			grid-row: 1;
+		}
+	}
 	@media (max-width: 560px) {
-		dl div {
-			grid-template-columns: 1fr;
-			gap: 0.1rem;
+		.about-page {
+			padding-top: 2rem;
+		}
+		.profile-hero {
+			gap: 1rem;
+			padding: 0 0.5rem 2rem;
+		}
+		.portrait {
+			width: 112px;
+		}
+		.github-link {
+			margin-top: 1rem;
+			padding: 0.3rem 0.85rem;
+			font-size: 0.85rem;
+		}
+		.about-section:not(.portfolio) {
+			padding: 1.6rem 0.5rem;
+		}
+		.portfolio {
+			padding-top: 1.6rem;
+			padding-bottom: 1.6rem;
+		}
+		.portfolio > .section-heading {
+			padding: 0 0.5rem;
+		}
+		.portfolio-nav {
+			flex-wrap: wrap;
+			gap: 0.8rem 0;
+			padding: 0.9rem 0.4rem;
+			font-size: 0.85rem;
+		}
+		.portfolio-nav a {
+			padding: 0 0.65rem;
+		}
+		.portfolio-nav a + a {
+			border-left: 0;
+		}
+		.portfolio-category {
+			padding: 1.5rem 0.5rem 0;
+		}
+		.category-heading h3 {
+			font-size: 1.25rem;
+		}
+		.project-list {
+			margin-left: 0;
+		}
+		.section-heading {
+			gap: 0.75rem;
+			margin-bottom: 1rem;
+		}
+		h2 {
+			font-size: 1.45rem;
+		}
+		.section-content {
+			margin-left: 0;
+		}
+		.greeting {
+			font-size: 1.05rem;
+		}
+		.project {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.65rem;
+			padding: 1.4rem 0;
+		}
+		.project-description,
+		.project-link {
+			grid-column: 1;
+			grid-row: auto;
+		}
+	}
+	@media (max-width: 440px) {
+		:global(.header-inner) {
+			flex-wrap: wrap;
+			gap: 0.6rem;
+		}
+		:global(.site-nav) {
+			margin-left: auto;
+		}
+		.profile-role {
+			font-size: 1.05rem;
+		}
+		.portrait {
+			width: 96px;
 		}
 	}
 </style>
